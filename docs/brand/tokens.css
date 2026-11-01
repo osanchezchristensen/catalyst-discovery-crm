@@ -1,0 +1,58 @@
+/* Catalyst Discovery CRM design tokens. Source: docs/brand/brand-kit.md
+   HSL triplets follow the shadcn/ui convention: hsl(var(--primary)). */
+:root {
+  /* KU palette (reference only; components use semantic tokens below) */
+  --ku-blue: #0051ba;
+  --ku-blue-darker: #004091;
+  --ku-blue-darkest: #003171;
+  --ku-night: #003459;
+  --ku-crimson: #e8000d;
+  --ku-crimson-darker: #b90009;
+  --ku-steam: #dde5ed;
+  --ku-steam-lightest: #f2f5f8;
+  --ku-sky: #73cbf2;
+  --ku-gold: #ffc82d;
+  --ku-bright-blue: #2767ff;
+  --ku-brick: #c66e4e;
+  --ku-gray: #85898a;
+
+  /* Semantic tokens (shadcn/ui) */
+  --background: 210 30% 96%;
+  --foreground: 205 100% 17%;
+  --card: 0 0% 100%;
+  --card-foreground: 205 100% 17%;
+  --popover: 0 0% 100%;
+  --popover-foreground: 205 100% 17%;
+  --primary: 214 100% 36%;
+  --primary-hover: 214 100% 28%;
+  --primary-foreground: 0 0% 100%;
+  --secondary: 210 31% 90%;
+  --secondary-foreground: 205 100% 17%;
+  --muted: 210 31% 90%;
+  --muted-foreground: 210 13% 35%;
+  --accent: 198 83% 70%;
+  --accent-foreground: 205 100% 17%;
+  --destructive: 357 100% 45%;
+  --destructive-foreground: 0 0% 100%;
+  --warning: 44 100% 59%;
+  --warning-foreground: 205 100% 17%;
+  --border: 210 31% 90%;
+  --input: 210 31% 90%;
+  --ring: 214 100% 36%;
+  --sidebar: 214 100% 22%;
+  --sidebar-foreground: 0 0% 100%;
+  --chart-1: 214 100% 36%;
+  --chart-2: 222 100% 58%;
+  --chart-3: 16 51% 54%;
+  --chart-4: 198 83% 70%;
+  --chart-5: 44 100% 59%;
+  --radius: 0.5rem;
+
+  /* Type */
+  --font-display: "Moret", Palatino, "Palatino Linotype", "Book Antiqua", Georgia, serif;
+  --font-sans: "Roc Grotesk", Arial, Helvetica, sans-serif;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after { transition-duration: 0.01ms !important; animation-duration: 0.01ms !important; }
+}

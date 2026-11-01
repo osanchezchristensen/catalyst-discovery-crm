@@ -1,0 +1,38 @@
+# Dependencies and builds
+node_modules/
+dist/
+dist-electron/
+out/
+release/
+*.tsbuildinfo
+coverage/
+
+# Env and secrets
+.env
+.env.*
+!.env.example
+
+# OS / editor
+.DS_Store
+Thumbs.db
+.vscode/*
+!.vscode/extensions.json
+
+# Local app data used in development
+*.sqlite
+*.sqlite-journal
+*.db
+backups/
+
+# Obsidian (keep shared settings, ignore per-device layout)
+docs/.obsidian/workspace.json
+docs/.obsidian/workspace-mobile.json
+docs/.obsidian/cache
+docs/.trash/
+
+# Graphify output (rebuildable; keep the report if you want)
+graphify-out/
+!graphify-out/GRAPH_REPORT.md
+
+# Claude Code local-only settings
+.claude/settings.local.json
