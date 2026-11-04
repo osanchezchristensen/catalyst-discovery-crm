@@ -14,6 +14,12 @@ const shortDate = (iso: string) => {
   return new Intl.DateTimeFormat(undefined, { month: 'short', day: 'numeric' }).format(new Date(y, m - 1, d))
 }
 
+/** The tag whose interviews hurt most, e.g. 'cost (4.5)'. */
+const topPain = (tags: Dashboard['topTags']) => {
+  const rated = tags.filter((t) => t.avgPain !== null).sort((a, b) => b.avgPain! - a.avgPain!)
+  return rated.length ? `${rated[0].tag} (${rated[0].avgPain})` : 'no pain scores yet'
+}
+
 const DECISION_ICONS: Record<DecisionKind, LucideIcon> = { persevere: TrendingUp, pivot: Shuffle, pause: Pause, stop: Square }
 
 export function Viability({ onNotify, onError }: { onNotify: (message: string) => void; onError: (err: unknown) => void }) {
@@ -102,6 +108,21 @@ export function Viability({ onNotify, onError }: { onNotify: (message: string) =
               : [{ key: 'all', label: 'All interviews', colorClass: 'text-chart-1' }]
           }
           empty="No pain scores yet. Rate pain 1–5 when you log an interview."
+        />
+        <BarChartCard
+          title="Top insight tags"
+          summary={
+            data.topTags.length
+              ? `Most-used tags. Highest average pain: ${topPain(data.topTags)}.`
+              : 'Tag your insights to see which pains come up most.'
+          }
+          rows={data.topTags.map((t) => ({ tag: t.tag, count: t.count, avgPain: t.avgPain ?? 'Not rated' }))}
+          category="tag"
+          categoryLabel="Tag"
+          series={[{ key: 'count', label: 'Insights', colorClass: 'text-chart-1' }]}
+          tableExtras={[{ key: 'avgPain', label: 'Average pain (1–5)' }]}
+          horizontal
+          empty="No tagged insights yet."
         />
       </div>
 

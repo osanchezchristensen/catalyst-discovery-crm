@@ -10,6 +10,7 @@ const LABELS: Record<WorkspaceTable, string> = {
   cohorts: 'Cohorts',
   ventures: 'Ventures',
   venture_members: 'Team members',
+  guides: 'Interview guides',
   segments: 'Segments',
   contacts: 'Contacts',
   interviews: 'Interviews',

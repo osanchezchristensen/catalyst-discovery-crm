@@ -1,16 +1,19 @@
-import { ArrowLeft, Plus, Trash2 } from 'lucide-react'
-import { useCallback, useEffect, useRef, useState } from 'react'
+import { ArrowLeft, ListChecks, Plus, Quote, Sparkles, Trash2 } from 'lucide-react'
+import { useCallback, useEffect, useRef, useState, type SyntheticEvent } from 'react'
 import {
   INTERVIEW_FORMATS as FORMATS,
   VERDICTS,
   interviewInput,
   type Contact,
   type EvidenceItem,
+  type Guide,
+  type Insight,
   type Hypothesis,
   type Interview,
   type InterviewInput
 } from '../../../shared/schema'
 import { SelectField, TextAreaField, TextField } from '@/components/Field'
+import { InsightDialog } from '@/components/InsightDialog'
 import { Button } from '@/components/ui/button'
 import { Card, CardTitle } from '@/components/ui/card'
 import { FORMAT_LABELS, NOTE_FIELDS, TYPE_LABELS, VERDICT_LABELS, blankContact, blankInterview, fieldErrors } from '@/lib/discovery'
@@ -57,6 +60,12 @@ export function InterviewEditor({
   const [id, setId] = useState(initialId)
   const [contacts, setContacts] = useState<Contact[]>([])
   const [hypotheses, setHypotheses] = useState<Hypothesis[]>([])
+  const [guides, setGuides] = useState<Guide[]>([])
+  const [guideId, setGuideId] = useState('')
+  const [insights, setInsights] = useState<Insight[]>([])
+  const [selection, setSelection] = useState({ text: '', quote: false })
+  const [insightDraft, setInsightDraft] = useState<{ text: string; is_quote: boolean } | null>(null)
+  const [followUpFor, setFollowUpFor] = useState('') // the next step already turned into a follow-up
   const [errors, setErrors] = useState<Record<string, string>>({})
   const [status, setStatus] = useState('')
   const [quickContact, setQuickContact] = useState('')
@@ -65,6 +74,8 @@ export function InterviewEditor({
   useEffect(() => {
     window.api.listContacts().then(setContacts, onError)
     window.api.listHypotheses().then(setHypotheses, onError)
+    window.api.listGuides().then(setGuides, onError)
+    if (initialId) window.api.listInsights().then((all) => setInsights(all.filter((n) => n.interview_id === initialId)), onError)
     if (!initialId) return
     window.api.getInterview(initialId).then((i) => {
       if (!i) return onBack()
@@ -130,6 +141,22 @@ export function InterviewEditor({
   }, [save])
 
   if (!draft) return null
+  const guide = guides.find((g) => g.id === guideId)
+  /** Remembers highlighted text in a notes box so it can become an insight. */
+  const capture = (quote: boolean) => (e: SyntheticEvent<HTMLTextAreaElement>) => {
+    const t = e.currentTarget
+    const text = t.value.slice(t.selectionStart, t.selectionEnd).trim()
+    if (text) setSelection({ text, quote })
+  }
+  const addFollowUp = async () => {
+    try {
+      await window.api.saveTask({ title: draft.next_step.trim(), due_date: draft.follow_up_date, interview_id: id, done: false })
+      setFollowUpFor(draft.next_step.trim())
+      onNotify('Follow-up added to Home')
+    } catch (err) {
+      onError(err)
+    }
+  }
   // Names on the interview stay visible even if a teammate was renamed or removed.
   const people = [...new Set([...team, ...draft.interviewers])]
   const set = (patch: Partial<InterviewInput>) => setDraft({ ...draft, ...patch })
@@ -266,6 +293,37 @@ export function InterviewEditor({
         </fieldset>
       </Card>
 
+      {guides.length > 0 && (
+        <Card>
+          <div className="flex items-end justify-between gap-4">
+            <CardTitle>Interview guide</CardTitle>
+            <div className="w-64">
+              <SelectField label="Guide" hideLabel value={guideId} onChange={(e) => setGuideId(e.target.value)}>
+                <option value="">No guide</option>
+                {guides.map((g) => (
+                  <option key={g.id} value={g.id}>
+                    {g.name}
+                  </option>
+                ))}
+              </SelectField>
+            </div>
+          </div>
+          {guide && (
+            <ol className="mt-3 flex flex-col gap-1">
+              {guide.questions.map((q, n) => (
+                <li key={n}>
+                  <label className="flex items-start gap-2">
+                    <input type="checkbox" className="mt-1 size-4 shrink-0 accent-primary" />
+                    <span className="break-words">{q}</span>
+                  </label>
+                </li>
+              ))}
+            </ol>
+          )}
+          {!guide && <p className="mt-2 text-[13px] text-muted-foreground">Pick a guide to keep your questions in view. Ticks aren&apos;t saved.</p>}
+        </Card>
+      )}
+
       <Card>
         <CardTitle>Notes</CardTitle>
         <p className="mt-1 text-[13px] text-muted-foreground">Write down what they did, not what they say they would do.</p>
@@ -277,6 +335,7 @@ export function InterviewEditor({
               hint={f.hint}
               value={draft.notes[f.key]}
               onChange={(e) => setNote(f.key, e.target.value)}
+              onSelect={capture(false)}
               maxLength={20000}
             />
           ))}
@@ -286,9 +345,40 @@ export function InterviewEditor({
               hint="Their exact words. One per line."
               value={draft.quotes}
               onChange={(e) => set({ quotes: e.target.value })}
+              onSelect={capture(true)}
               maxLength={20000}
             />
           </div>
+        </div>
+      </Card>
+
+      <Card>
+        <CardTitle>Insights</CardTitle>
+        <p className="mt-1 text-[13px] text-muted-foreground">
+          Highlight a line in your notes or quotes, then save it as an insight and tag it.
+        </p>
+        {insights.length > 0 && (
+          <ul className="mt-3 flex flex-col gap-1">
+            {insights.map((n) => (
+              <li key={n.id} className="flex flex-wrap items-baseline gap-2">
+                {n.is_quote && <Quote className="size-4 shrink-0 self-center" strokeWidth={1.5} aria-label="Quote" />}
+                <span className="break-words">{n.text}</span>
+                {n.tags.length > 0 && <span className="text-[13px] text-muted-foreground">({n.tags.join(', ')})</span>}
+              </li>
+            ))}
+          </ul>
+        )}
+        <div className="mt-4 flex flex-wrap items-center gap-2">
+          <Button
+            variant="secondary"
+            size="sm"
+            disabled={!id}
+            onClick={() => setInsightDraft({ text: selection.text, is_quote: selection.quote })}
+          >
+            <Sparkles aria-hidden strokeWidth={1.5} />
+            {selection.text ? 'Save highlighted text as insight' : 'Add insight'}
+          </Button>
+          {!id && <span className="text-[13px] text-muted-foreground">Insights can be added once the interview has saved.</span>}
         </div>
       </Card>
 
@@ -371,7 +461,13 @@ export function InterviewEditor({
             onChange={(e) => set({ wtp_signal: e.target.value })}
             maxLength={200}
           />
-          <TextField label="Next step" value={draft.next_step} onChange={(e) => set({ next_step: e.target.value })} maxLength={20000} />
+          <div>
+            <TextField label="Next step" value={draft.next_step} onChange={(e) => set({ next_step: e.target.value })} maxLength={20000} />
+            <Button variant="ghost" size="sm" className="mt-1" disabled={!draft.next_step.trim() || draft.next_step.trim() === followUpFor} onClick={addFollowUp}>
+              <ListChecks aria-hidden strokeWidth={1.5} />
+              Add as follow-up
+            </Button>
+          </div>
           <TextField
             label="Follow-up date"
             type="date"
@@ -398,6 +494,20 @@ export function InterviewEditor({
           <Button onClick={done}>Done</Button>
         </div>
       </div>
+      {insightDraft && id && (
+        <InsightDialog
+          insight={null}
+          draft={{ ...insightDraft, interview_id: id }}
+          onClose={() => setInsightDraft(null)}
+          onSaved={(n) => {
+            setInsightDraft(null)
+            setSelection({ text: '', quote: false })
+            setInsights([n, ...insights])
+            onNotify('Insight saved')
+          }}
+          onError={onError}
+        />
+      )}
     </div>
   )
 }

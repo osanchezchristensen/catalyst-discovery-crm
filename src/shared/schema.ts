@@ -52,8 +52,11 @@ export const workspaceTables = {
   }),
   ventures: z.object({
     id, cohort_id: id.nullable(), name, pitch: long, problem: long, stage, semester: short,
-    status: z.enum(VENTURE_STATUSES), created_by: short, ...stamps
+    status: z.enum(VENTURE_STATUSES), created_by: short,
+    // Files exported before migration v4 have no weekly_goal.
+    weekly_goal: z.int().min(1).max(20).default(3), ...stamps
   }),
+  guides: z.object({ id, venture_id: id, name, questions: jsonText, ...stamps }),
   venture_members: z.object({ id, venture_id: id, name, role: z.enum(MEMBER_ROLES), ...stamps }),
   segments: z.object({ id, venture_id: id, name, description: long, is_beachhead: bool, ...stamps }),
   contacts: z.object({
@@ -174,6 +177,22 @@ export const decisionInput = z.object({
 
 export const versionInput = z.int().min(1).optional()
 
+export const weeklyGoalInput = z.int('Use a whole number').min(1, 'Aim for at least 1 interview a week').max(20, 'Keep it to 20 or fewer')
+
+export const taskInput = workspaceTables.tasks
+  .pick({ title: true, due_date: true, interview_id: true })
+  .extend({ id: id.optional(), done: z.boolean() })
+
+export const insightInput = workspaceTables.insights
+  .pick({ interview_id: true, text: true })
+  .extend({ id: id.optional(), tags: tagList, is_quote: z.boolean() })
+
+export const guideInput = z.object({
+  id: id.optional(),
+  name,
+  questions: z.array(z.string().trim().min(1).max(500)).max(50)
+})
+
 /** A hypothesis as it stood when a decision cited it (stored as JSON in decisions.evidence_ids; imports are untrusted). */
 export const hypothesisSnapshot = z.object({
   hypothesis_id: z.string().max(100),
@@ -231,7 +250,27 @@ export type Decision = {
   created_at: string
 }
 
+export type TaskInput = z.input<typeof taskInput>
+export type Task = { id: string; title: string; due_date: string | null; done: boolean; interview_id: string | null; created_at: string }
+export type Home = { goal: number; thisWeek: number; streak: number; tasks: Task[] }
+
+export type InsightInput = z.input<typeof insightInput>
+export type Insight = {
+  id: string
+  interview_id: string | null
+  text: string
+  tags: string[]
+  is_quote: boolean
+  date: string | null
+  contact_name: string | null
+  created_at: string
+}
+
+export type GuideInput = z.input<typeof guideInput>
+export type Guide = { id: string; name: string; questions: string[]; updated_at: string }
+
 export type Dashboard = {
+  topTags: { tag: string; count: number; avgPain: number | null }[]
   perWeek: { week: string; count: number }[]
   bySegment: { segment: string; count: number }[]
   pain: { score: number; all: number; beachhead: number }[]

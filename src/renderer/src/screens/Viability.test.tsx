@@ -20,6 +20,7 @@ const dashboard: Dashboard = {
   bySegment: [{ segment: 'Freshmen', count: 2 }],
   pain: [1, 2, 3, 4, 5].map((score) => ({ score, all: score === 5 ? 2 : 0, beachhead: score === 5 ? 2 : 0 })),
   hasBeachhead: true,
+  topTags: [],
   hypotheses: [hypothesis],
   decisions: [],
   readiness: readiness({

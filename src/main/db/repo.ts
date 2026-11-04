@@ -2,7 +2,9 @@ import { randomUUID } from 'node:crypto'
 import type Database from 'better-sqlite3'
 import type { z } from 'zod'
 import { suggestStatus, type Tally } from '../../shared/evidence'
+import { addDays, today, weekStart } from '../../shared/dates'
 import { readiness } from '../../shared/readiness'
+import { streak } from '../../shared/streak'
 import { hypothesisSnapshot } from '../../shared/schema'
 import type {
   Contact,
@@ -10,6 +12,13 @@ import type {
   contactInput,
   Dashboard,
   Decision,
+  Guide,
+  guideInput,
+  Home,
+  Insight,
+  insightInput,
+  Task,
+  taskInput,
   decisionInput,
   DecisionKind,
   EvidenceItem,
@@ -210,7 +219,7 @@ function decodeInterview(row: Record<string, unknown>, evidence: EvidenceItem[])
   }
 }
 
-function assertInVenture(db: DB, table: 'segments' | 'contacts', id: string | null, ventureId: string, what: string) {
+function assertInVenture(db: DB, table: 'segments' | 'contacts' | 'interviews', id: string | null, ventureId: string, what: string) {
   if (id && !db.prepare(`SELECT 1 FROM ${table} WHERE id = ? AND venture_id = ?`).get(id, ventureId)) {
     throw new Error(`That ${what} no longer exists. Reload and try again.`)
   }
@@ -536,19 +545,7 @@ export function deleteDecision(db: DB, id: string): void {
   db.prepare('DELETE FROM decisions WHERE id = ? AND venture_id = ?').run(id, requireVenture(db))
 }
 
-const DAY_MS = 24 * 60 * 60 * 1000
 const MAX_WEEKS = 26
-const addDays = (date: string, days: number) => new Date(Date.parse(`${date}T00:00:00Z`) + days * DAY_MS).toISOString().slice(0, 10)
-/** Today's date in this computer's time zone, as YYYY-MM-DD. */
-const localToday = () => {
-  const d = new Date()
-  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`
-}
-/** Monday of the week containing a YYYY-MM-DD date, computed in UTC so no time zone can shift it. */
-export function weekStart(date: string): string {
-  const d = new Date(`${date}T00:00:00Z`)
-  return new Date(d.getTime() - ((d.getUTCDay() + 6) % 7) * DAY_MS).toISOString().slice(0, 10)
-}
 
 export function getDashboard(db: DB): Dashboard {
   const v = activeVentureId(db)
@@ -571,7 +568,7 @@ export function getDashboard(db: DB): Dashboard {
 
   // Every week up to the latest interview, empty ones included so gaps show. Capped at
   // MAX_WEEKS and never past this week, so a mistyped year (2062) can't create thousands of bars.
-  const thisWeek = weekStart(localToday())
+  const thisWeek = weekStart(today())
   const counts = new Map<string, number>()
   for (const i of interviews) counts.set(weekStart(i.date), (counts.get(weekStart(i.date)) ?? 0) + 1)
   const weeks = [...counts.keys()].filter((w) => w <= thisWeek).sort()
@@ -605,6 +602,194 @@ export function getDashboard(db: DB): Dashboard {
     hasBeachhead: !!beachhead,
     hypotheses,
     decisions,
-    readiness: readiness({ segments, interviews, hypotheses, decisions })
+    readiness: readiness({ segments, interviews, hypotheses, decisions }),
+    topTags: v ? topTags(db, v) : []
   }
+}
+
+// ---- Follow-ups and the weekly goal (F12) ----
+type TaskSave = z.output<typeof taskInput>
+
+const decodeTask = (r: Record<string, unknown>): Task => ({
+  id: r.id as string,
+  title: r.title as string,
+  due_date: r.due_date as string | null,
+  done: r.done === 1,
+  interview_id: r.interview_id as string | null,
+  created_at: r.created_at as string
+})
+
+/** Open tasks first, then by due date (undated last). */
+export function listTasks(db: DB): Task[] {
+  const v = activeVentureId(db)
+  if (!v) return []
+  return (
+    db
+      .prepare('SELECT * FROM tasks WHERE venture_id = ? ORDER BY done, due_date IS NULL, due_date, created_at')
+      .all(v) as Record<string, unknown>[]
+  ).map(decodeTask)
+}
+
+export function saveTask(db: DB, input: TaskSave): Task {
+  const v = requireVenture(db)
+  assertInVenture(db, 'interviews', input.interview_id, v, 'interview')
+  const t = now()
+  const p = { ...input, done: input.done ? 1 : 0, v, t }
+  let id = input.id
+  if (id) {
+    const changed = db
+      .prepare(
+        'UPDATE tasks SET title = @title, due_date = @due_date, done = @done, interview_id = @interview_id, updated_at = @t WHERE id = @id AND venture_id = @v'
+      )
+      .run(p).changes
+    if (!changed) throw new Error('That follow-up no longer exists. Reload and try again.')
+  } else {
+    id = randomUUID()
+    db.prepare(
+      `INSERT INTO tasks (id, venture_id, assignee_name, title, due_date, done, interview_id, created_at, updated_at)
+       VALUES (@id, @v, '', @title, @due_date, @done, @interview_id, @t, @t)`
+    ).run({ ...p, id })
+  }
+  return decodeTask(db.prepare('SELECT * FROM tasks WHERE id = ?').get(id) as Record<string, unknown>)
+}
+
+export function deleteTask(db: DB, id: string): void {
+  db.prepare('DELETE FROM tasks WHERE id = ? AND venture_id = ?').run(id, requireVenture(db))
+}
+
+export function setWeeklyGoal(db: DB, goal: number): void {
+  db.prepare('UPDATE ventures SET weekly_goal = ?, updated_at = ? WHERE id = ?').run(goal, now(), requireVenture(db))
+}
+
+/** What the Home screen needs: this week's interviews against the goal, the streak, and open follow-ups. */
+export function getHome(db: DB): Home {
+  const v = activeVentureId(db)
+  if (!v) return { goal: 3, thisWeek: 0, streak: 0, tasks: [] }
+  const goal = db.prepare('SELECT weekly_goal FROM ventures WHERE id = ?').pluck().get(v) as number
+  const perWeek = new Map<string, number>()
+  for (const d of db.prepare('SELECT date FROM interviews WHERE venture_id = ?').pluck().all(v) as string[]) {
+    perWeek.set(weekStart(d), (perWeek.get(weekStart(d)) ?? 0) + 1)
+  }
+  const thisWeek = weekStart(today())
+  return {
+    goal,
+    thisWeek: perWeek.get(thisWeek) ?? 0,
+    streak: streak(perWeek, goal, thisWeek),
+    tasks: listTasks(db).filter((t) => !t.done)
+  }
+}
+
+// ---- Insights and tags (F10) ----
+type InsightSave = z.output<typeof insightInput>
+
+export function listInsights(db: DB): Insight[] {
+  const v = activeVentureId(db)
+  if (!v) return []
+  const rows = db
+    .prepare(
+      `SELECT n.*, i.date, c.name AS contact_name FROM insights n
+       LEFT JOIN interviews i ON i.id = n.interview_id LEFT JOIN contacts c ON c.id = i.contact_id
+       WHERE n.venture_id = ? ORDER BY n.created_at DESC, n.rowid DESC`
+    )
+    .all(v) as Record<string, unknown>[]
+  return rows.map((r) => ({
+    id: r.id as string,
+    interview_id: r.interview_id as string | null,
+    text: r.text as string,
+    tags: strings(parseJson(r.tags as string)),
+    is_quote: r.is_quote === 1,
+    date: (r.date as string | null) ?? null,
+    contact_name: (r.contact_name as string | null) ?? null,
+    created_at: r.created_at as string
+  }))
+}
+
+export function saveInsight(db: DB, input: InsightSave): Insight {
+  const v = requireVenture(db)
+  assertInVenture(db, 'interviews', input.interview_id, v, 'interview')
+  const t = now()
+  const p = { ...input, tags: JSON.stringify(input.tags), is_quote: input.is_quote ? 1 : 0, v, t }
+  let id = input.id
+  if (id) {
+    const changed = db
+      .prepare(
+        'UPDATE insights SET interview_id = @interview_id, text = @text, tags = @tags, is_quote = @is_quote, updated_at = @t WHERE id = @id AND venture_id = @v'
+      )
+      .run(p).changes
+    if (!changed) throw new Error('That insight no longer exists. Reload and try again.')
+  } else {
+    id = randomUUID()
+    db.prepare(
+      `INSERT INTO insights (id, venture_id, interview_id, text, tags, is_quote, created_at, updated_at)
+       VALUES (@id, @v, @interview_id, @text, @tags, @is_quote, @t, @t)`
+    ).run({ ...p, id })
+  }
+  return listInsights(db).find((n) => n.id === id)!
+}
+
+export function deleteInsight(db: DB, id: string): void {
+  db.prepare('DELETE FROM insights WHERE id = ? AND venture_id = ?').run(id, requireVenture(db))
+}
+
+/** Most-used insight tags with the average pain score of the interviews they came from. */
+function topTags(db: DB, ventureId: string): Dashboard['topTags'] {
+  const rows = db
+    .prepare('SELECT n.tags, i.pain_score FROM insights n LEFT JOIN interviews i ON i.id = n.interview_id WHERE n.venture_id = ?')
+    .all(ventureId) as { tags: string; pain_score: number | null }[]
+  const byTag = new Map<string, { count: number; painSum: number; painN: number }>()
+  for (const r of rows) {
+    for (const tag of new Set(strings(parseJson(r.tags)))) {
+      const e = byTag.get(tag) ?? { count: 0, painSum: 0, painN: 0 }
+      e.count++
+      if (r.pain_score !== null) {
+        e.painSum += r.pain_score
+        e.painN++
+      }
+      byTag.set(tag, e)
+    }
+  }
+  return [...byTag]
+    .map(([tag, e]) => ({ tag, count: e.count, avgPain: e.painN ? Math.round((e.painSum / e.painN) * 10) / 10 : null }))
+    .sort((a, b) => b.count - a.count || a.tag.localeCompare(b.tag))
+    .slice(0, 10)
+}
+
+// ---- Interview guides (F9) ----
+type GuideSave = z.output<typeof guideInput>
+
+export function listGuides(db: DB): Guide[] {
+  const v = activeVentureId(db)
+  if (!v) return []
+  const rows = db
+    .prepare('SELECT id, name, questions, updated_at FROM guides WHERE venture_id = ? ORDER BY created_at, rowid')
+    .all(v) as (Omit<Guide, 'questions'> & { questions: string })[]
+  return rows.map((g) => ({ ...g, questions: strings(parseJson(g.questions)) }))
+}
+
+export function saveGuide(db: DB, input: GuideSave): Guide {
+  const v = requireVenture(db)
+  const t = now()
+  const questions = JSON.stringify(input.questions)
+  let id = input.id
+  if (id) {
+    const changed = db
+      .prepare('UPDATE guides SET name = ?, questions = ?, updated_at = ? WHERE id = ? AND venture_id = ?')
+      .run(input.name, questions, t, id, v).changes
+    if (!changed) throw new Error('That guide no longer exists. Reload and try again.')
+  } else {
+    id = randomUUID()
+    db.prepare('INSERT INTO guides (id, venture_id, name, questions, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?)').run(
+      id,
+      v,
+      input.name,
+      questions,
+      t,
+      t
+    )
+  }
+  return listGuides(db).find((g) => g.id === id)!
+}
+
+export function deleteGuide(db: DB, id: string): void {
+  db.prepare('DELETE FROM guides WHERE id = ? AND venture_id = ?').run(id, requireVenture(db))
 }

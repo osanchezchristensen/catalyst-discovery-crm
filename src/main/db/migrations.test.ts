@@ -74,6 +74,19 @@ describe('migrate', () => {
     expect(db.prepare("SELECT value FROM meta WHERE key = 'keep'").pluck().get()).toBe('me')
   })
 
+  it('v4 adds the weekly goal (default 3) and guides, keeping ventures', () => {
+    const db = fresh()
+    migrate(db, migrations.slice(0, 3))
+    db.prepare(
+      "INSERT INTO ventures (id, name, stage, created_at, updated_at) VALUES ('v1', 'Campus Eats', 1, 't', 't')"
+    ).run()
+    migrate(db, migrations.slice(0, 4))
+    expect(db.prepare('SELECT name, weekly_goal FROM ventures').get()).toEqual({ name: 'Campus Eats', weekly_goal: 3 })
+    expect(() => db.prepare("UPDATE ventures SET weekly_goal = 0").run()).toThrow(/CHECK/)
+    db.prepare("INSERT INTO guides (id, venture_id, name, created_at, updated_at) VALUES ('g1', 'v1', 'First calls', 't', 't')").run()
+    expect(db.prepare('SELECT questions FROM guides').pluck().get()).toBe('[]')
+  })
+
   it('refuses a database from a newer app version', () => {
     const db = fresh()
     db.pragma(`user_version = ${migrations.length + 1}`)

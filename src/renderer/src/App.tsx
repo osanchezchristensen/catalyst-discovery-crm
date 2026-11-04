@@ -11,13 +11,14 @@ import { errorMessage } from '@/lib/utils'
 import { Contacts } from '@/screens/Contacts'
 import { Home } from '@/screens/Home'
 import { Hypotheses } from '@/screens/Hypotheses'
+import { Insights } from '@/screens/Insights'
 import { InterviewEditor } from '@/screens/InterviewEditor'
 import { Interviews } from '@/screens/Interviews'
 import { VentureOverview } from '@/screens/VentureOverview'
 import { Viability } from '@/screens/Viability'
 import { Welcome } from '@/screens/Welcome'
 
-const TITLES: Record<Screen, string> = { home: 'Home', venture: 'Venture', contacts: 'Contacts', hypotheses: 'Hypotheses', interviews: 'Interviews', viability: 'Viability' }
+const TITLES: Record<Screen, string> = { home: 'Home', venture: 'Venture', contacts: 'Contacts', hypotheses: 'Hypotheses', interviews: 'Interviews', insights: 'Insights', viability: 'Viability' }
 const api = window.api
 
 export default function App() {
@@ -189,7 +190,7 @@ export default function App() {
         <main id="main" tabIndex={-1} className="relative flex-1 scroll-pb-24 overflow-auto">
           <div className="mx-auto max-w-[1280px] p-6">
             {screen === 'home' ? (
-              <Home key={loads} lastBackupAt={lastBackupAt} onBackup={backup} onOpenInterview={openInterview} onError={onError} />
+              <Home key={loads} lastBackupAt={lastBackupAt} onBackup={backup} onOpenInterview={openInterview} onNotify={toastSuccess} onError={onError} />
             ) : screen === 'contacts' ? (
               <Contacts
                 key={loads}
@@ -198,6 +199,8 @@ export default function App() {
                 onNotify={toastSuccess}
                 onError={onError}
               />
+            ) : screen === 'insights' ? (
+              <Insights key={loads} onOpenInterview={openInterview} onNotify={toastSuccess} onError={onError} />
             ) : screen === 'viability' ? (
               <Viability key={loads} onNotify={toastSuccess} onError={onError} />
             ) : screen === 'hypotheses' ? (
@@ -213,7 +216,7 @@ export default function App() {
                 onError={onError}
               />
             ) : screen === 'interviews' ? (
-              <Interviews key={loads} onOpen={openInterview} onError={onError} />
+              <Interviews key={loads} onOpen={openInterview} onNotify={toastSuccess} onDirtyChange={setUnsaved} confirmLeave={confirmLeave} onError={onError} />
             ) : (
               <VentureOverview
                 key={`${loads}-${venture.venture.updated_at}`}
