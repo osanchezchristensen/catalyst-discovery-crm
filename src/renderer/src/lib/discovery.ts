@@ -1,5 +1,6 @@
-import type { ContactInput, ContactStage, InterviewInput } from '../../../shared/schema'
-import type { CONTACT_SOURCES, INTERVIEW_FORMATS } from '../../../shared/schema'
+import type { HypothesisStatus, Tally } from '../../../shared/evidence'
+import type { ContactInput, ContactStage, HypothesisType, InterviewInput } from '../../../shared/schema'
+import type { CONTACT_SOURCES, INTERVIEW_FORMATS, RISKS, VERDICTS } from '../../../shared/schema'
 
 export const STAGE_LABELS: Record<ContactStage, string> = {
   identified: 'Identified',
@@ -67,7 +68,8 @@ export const blankInterview = (): InterviewInput => ({
   pain_score: null,
   wtp_signal: '',
   next_step: '',
-  follow_up_date: null
+  follow_up_date: null,
+  evidence: []
 })
 
 /** Zod issues to a field-name → message map (first message per field). */
@@ -79,3 +81,31 @@ export function fieldErrors(issues: { path: PropertyKey[]; message: string }[]):
   }
   return out
 }
+
+export const TYPE_LABELS: Record<HypothesisType, string> = {
+  customer: 'Customer',
+  problem: 'Problem',
+  solution: 'Solution/Value',
+  channel: 'Channel',
+  revenue: 'Revenue/WTP',
+  feasibility: 'Feasibility'
+}
+
+export const RISK_LABELS: Record<(typeof RISKS)[number], string> = { low: 'Low risk', medium: 'Medium risk', high: 'High risk' }
+
+export const STATUS_LABELS: Record<HypothesisStatus, string> = {
+  untested: 'Untested',
+  testing: 'Testing',
+  validated: 'Validated',
+  invalidated: 'Invalidated',
+  mixed: 'Mixed'
+}
+
+export const VERDICT_LABELS: Record<(typeof VERDICTS)[number], string> = {
+  supports: 'Supports',
+  refutes: 'Refutes',
+  neutral: 'Neutral'
+}
+
+export const tallyText = ({ supports, refutes, neutral }: Tally) =>
+  `${supports} support · ${refutes} refute · ${neutral} neutral`

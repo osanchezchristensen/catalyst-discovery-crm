@@ -1,10 +1,15 @@
 import { randomUUID } from 'node:crypto'
 import type Database from 'better-sqlite3'
 import type { z } from 'zod'
+import { suggestStatus, type Tally } from '../../shared/evidence'
 import type {
   Contact,
   ContactStage,
   contactInput,
+  EvidenceItem,
+  EvidenceLink,
+  Hypothesis,
+  hypothesisInput,
   Interview,
   interviewInput,
   Member,
@@ -186,14 +191,15 @@ function decodeContact(row: Record<string, unknown>): Contact {
   return { ...(row as Contact), tags: strings(parseJson(row.tags as string)), consent_followup: row.consent_followup === 1 }
 }
 
-function decodeInterview(row: Record<string, unknown>): Interview {
+function decodeInterview(row: Record<string, unknown>, evidence: EvidenceItem[]): Interview {
   const n = parseJson(row.notes as string)
   const o = n && typeof n === 'object' ? (n as Record<string, unknown>) : {}
   const text = (k: string) => (typeof o[k] === 'string' ? (o[k] as string) : '')
   return {
     ...(row as Interview),
     interviewers: strings(parseJson(row.interviewers as string)),
-    notes: { behavior: text('behavior'), pains: text('pains'), solutions: text('solutions'), budget: text('budget') }
+    notes: { behavior: text('behavior'), pains: text('pains'), solutions: text('solutions'), budget: text('budget') },
+    evidence
   }
 }
 
@@ -256,12 +262,51 @@ export function listInterviews(db: DB): Interview[] {
   const v = activeVentureId(db)
   if (!v) return []
   const rows = db.prepare(`${INTERVIEW_SELECT} WHERE i.venture_id = ? ORDER BY i.date DESC, i.created_at DESC`).all(v)
-  return (rows as Record<string, unknown>[]).map(decodeInterview)
+  // One query for all evidence, grouped by interview, instead of one query per interview.
+  const byInterview = new Map<string, EvidenceItem[]>()
+  const links = db
+    .prepare(
+      `SELECT e.interview_id, e.hypothesis_id, e.verdict, e.note FROM evidence e
+       JOIN interviews i ON i.id = e.interview_id WHERE i.venture_id = ? ORDER BY e.created_at, e.rowid`
+    )
+    .all(v) as (EvidenceItem & { interview_id: string })[]
+  for (const { interview_id, ...item } of links) byInterview.set(interview_id, [...(byInterview.get(interview_id) ?? []), item])
+  return (rows as Record<string, unknown>[]).map((r) => decodeInterview(r, byInterview.get(r.id as string) ?? []))
 }
+
+const evidenceOf = (db: DB, interviewId: string) =>
+  db
+    .prepare('SELECT hypothesis_id, verdict, note FROM evidence WHERE interview_id = ? ORDER BY created_at, rowid')
+    .all(interviewId) as EvidenceItem[]
 
 export function getInterview(db: DB, id: string): Interview | null {
   const row = db.prepare(`${INTERVIEW_SELECT} WHERE i.id = ? AND i.venture_id = ?`).get(id, requireVenture(db))
-  return row ? decodeInterview(row as Record<string, unknown>) : null
+  return row ? decodeInterview(row as Record<string, unknown>, evidenceOf(db, id)) : null
+}
+
+/** Replaces one interview's evidence as a set: one row per hypothesis; unchanged rows keep their timestamps. */
+function replaceEvidence(db: DB, interviewId: string, items: EvidenceItem[], ventureId: string, t: string) {
+  const allowed = new Set(db.prepare('SELECT id FROM hypotheses WHERE venture_id = ?').pluck().all(ventureId) as string[])
+  for (const e of items) {
+    if (!allowed.has(e.hypothesis_id)) throw new Error('That hypothesis no longer exists. Reload and try again.')
+  }
+  const existing = new Map(
+    (db.prepare('SELECT id, hypothesis_id, verdict, note FROM evidence WHERE interview_id = ?').all(interviewId) as (EvidenceItem & {
+      id: string
+    })[]).map((e) => [e.hypothesis_id, e])
+  )
+  const keep = new Set(items.map((e) => e.hypothesis_id))
+  const del = db.prepare('DELETE FROM evidence WHERE id = ?')
+  for (const [hyp, e] of existing) if (!keep.has(hyp)) del.run(e.id)
+  const update = db.prepare('UPDATE evidence SET verdict = ?, note = ?, updated_at = ? WHERE id = ?')
+  const insert = db.prepare(
+    'INSERT INTO evidence (id, hypothesis_id, interview_id, verdict, note, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?)'
+  )
+  for (const e of items) {
+    const old = existing.get(e.hypothesis_id)
+    if (!old) insert.run(randomUUID(), e.hypothesis_id, interviewId, e.verdict, e.note, t, t)
+    else if (old.verdict !== e.verdict || old.note !== e.note) update.run(e.verdict, e.note, t, old.id)
+  }
 }
 
 const BEFORE_INTERVIEWED: ContactStage[] = ['identified', 'reached_out', 'scheduled']
@@ -297,10 +342,108 @@ export function saveInterview(db: DB, input: InterviewSave): Interview {
         `UPDATE contacts SET stage = 'interviewed', updated_at = ? WHERE id = ? AND stage IN (${BEFORE_INTERVIEWED.map(() => '?').join(', ')})`
       ).run(t, input.contact_id, ...BEFORE_INTERVIEWED)
     }
+    replaceEvidence(db, id!, input.evidence, v, t)
   })()
   return getInterview(db, id!)!
 }
 
 export function deleteInterview(db: DB, id: string): void {
   db.prepare('DELETE FROM interviews WHERE id = ? AND venture_id = ?').run(id, requireVenture(db))
+}
+
+// ---- Hypotheses (F5) and evidence drill-down (F6) ----
+type HypothesisSave = z.output<typeof hypothesisInput>
+
+const currentVersion = (db: DB, ventureId: string) =>
+  (db.prepare('SELECT MAX(version) FROM hypotheses WHERE venture_id = ?').pluck().get(ventureId) as number | null) ?? 1
+
+/** The current version's hypotheses, each with its evidence tally and suggested status. */
+export function listHypotheses(db: DB): Hypothesis[] {
+  const v = activeVentureId(db)
+  if (!v) return []
+  const rows = db
+    .prepare(
+      `SELECT h.*,
+         COALESCE(SUM(e.verdict = 'supports'), 0) AS supports,
+         COALESCE(SUM(e.verdict = 'refutes'), 0) AS refutes,
+         COALESCE(SUM(e.verdict = 'neutral'), 0) AS neutral
+       FROM hypotheses h LEFT JOIN evidence e ON e.hypothesis_id = h.id
+       WHERE h.venture_id = ? AND h.version = ?
+       GROUP BY h.id ORDER BY h.created_at, h.rowid`
+    )
+    .all(v, currentVersion(db, v)) as (Omit<Hypothesis, 'tally' | 'suggested'> & Tally)[]
+  return rows.map(({ supports, refutes, neutral, ...h }) => {
+    const tally = { supports, refutes, neutral }
+    return { ...h, tally, suggested: suggestStatus(tally) }
+  })
+}
+
+export function saveHypothesis(db: DB, input: HypothesisSave): Hypothesis {
+  const v = requireVenture(db)
+  const t = now()
+  let id = input.id
+  if (id) {
+    const changed = db
+      .prepare(
+        `UPDATE hypotheses SET type = @type, statement = @statement, risk = @risk, status = @status,
+         success_criteria = @success_criteria, updated_at = @t WHERE id = @id AND venture_id = @v`
+      )
+      .run({ ...input, t, v }).changes
+    if (!changed) throw new Error('That hypothesis no longer exists. Reload and try again.')
+  } else {
+    id = randomUUID()
+    db.prepare(
+      `INSERT INTO hypotheses (id, venture_id, version, type, statement, risk, status, success_criteria, created_at, updated_at)
+       VALUES (@id, @v, @version, @type, @statement, @risk, @status, @success_criteria, @t, @t)`
+    ).run({ ...input, id, v, t, version: currentVersion(db, v) })
+  }
+  return listHypotheses(db).find((h) => h.id === id)!
+}
+
+/** Deletes a hypothesis; its evidence links go with it (FK ON DELETE CASCADE). */
+export function deleteHypothesis(db: DB, id: string): void {
+  db.prepare('DELETE FROM hypotheses WHERE id = ? AND venture_id = ?').run(id, requireVenture(db))
+}
+
+const STARTERS: Omit<HypothesisSave, 'id'>[] = [
+  {
+    type: 'customer',
+    statement: '[Who] struggle with [problem] at least once a week.',
+    risk: 'high',
+    status: 'untested',
+    success_criteria: '7 of 10 beachhead interviews describe this problem without prompting.'
+  },
+  {
+    type: 'problem',
+    statement: '[Who] handle [problem] today with [workaround], and it costs them time or money.',
+    risk: 'high',
+    status: 'untested',
+    success_criteria: 'Most interviews name a workaround and what it costs them.'
+  },
+  {
+    type: 'solution',
+    statement: '[Who] would switch to [our solution] because it [main benefit].',
+    risk: 'medium',
+    status: 'untested',
+    success_criteria: 'At least 3 interviews end with a pilot, pre-order or intro.'
+  }
+]
+
+/** Adds three fill-in-the-blank hypotheses (PRD onboarding flow). */
+export function addStarterHypotheses(db: DB): Hypothesis[] {
+  db.transaction(() => {
+    for (const s of STARTERS) saveHypothesis(db, s)
+  })()
+  return listHypotheses(db)
+}
+
+/** Every interview's verdict on one hypothesis, newest first. */
+export function listEvidence(db: DB, hypothesisId: string): EvidenceLink[] {
+  return db
+    .prepare(
+      `SELECT e.hypothesis_id, e.verdict, e.note, e.interview_id, i.date, c.name AS contact_name
+       FROM evidence e JOIN interviews i ON i.id = e.interview_id LEFT JOIN contacts c ON c.id = i.contact_id
+       WHERE e.hypothesis_id = ? AND i.venture_id = ? ORDER BY i.date DESC, i.created_at DESC`
+    )
+    .all(hypothesisId, requireVenture(db)) as EvidenceLink[]
 }

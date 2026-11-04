@@ -1,6 +1,7 @@
 // Zod schemas shared by main (the trust boundary) and renderer (types, and early field errors in forms).
 // Table schemas mirror the SQL in src/main/db/migrations.ts; a test keeps them in sync.
 import { z } from 'zod'
+import type { HypothesisStatus, Tally } from './evidence'
 
 const isJson = (s: string): boolean => {
   try {
@@ -145,9 +146,24 @@ export const contactStageInput = z.object({ id, stage: z.enum(CONTACT_STAGES) })
 
 export const interviewNotes = z.object({ behavior: long, pains: long, solutions: long, budget: long })
 
+export const evidenceItem = workspaceTables.evidence.pick({ hypothesis_id: true, verdict: true, note: true })
+
 export const interviewInput = workspaceTables.interviews
   .pick({ contact_id: true, date: true, format: true, quotes: true, pain_score: true, wtp_signal: true, next_step: true, follow_up_date: true })
-  .extend({ id: id.optional(), interviewers: z.array(short.min(1)).max(20), notes: interviewNotes })
+  .extend({
+    id: id.optional(),
+    interviewers: z.array(short.min(1)).max(20),
+    notes: interviewNotes,
+    evidence: z
+      .array(evidenceItem)
+      .max(200)
+      .refine((e) => new Set(e.map((x) => x.hypothesis_id)).size === e.length, 'Each hypothesis can be linked once')
+      .default([])
+  })
+
+export const hypothesisInput = workspaceTables.hypotheses
+  .pick({ type: true, statement: true, risk: true, status: true, success_criteria: true })
+  .extend({ id: id.optional() })
 
 // ---- Types ----
 export type Profile = z.infer<typeof profileRow>
@@ -168,8 +184,18 @@ export type Contact = Omit<ContactRow, 'tags' | 'consent_followup'> & { tags: st
 export type InterviewNotes = z.infer<typeof interviewNotes>
 export type InterviewInput = z.input<typeof interviewInput>
 type InterviewRow = z.infer<(typeof workspaceTables)['interviews']>
+export type EvidenceItem = z.infer<typeof evidenceItem>
 export type Interview = Omit<InterviewRow, 'interviewers' | 'notes'> & {
   interviewers: string[]
   notes: InterviewNotes
   contact_name: string | null
+  evidence: EvidenceItem[]
 }
+
+export type HypothesisType = (typeof HYPOTHESIS_TYPES)[number]
+export type HypothesisInput = z.input<typeof hypothesisInput>
+type HypothesisRow = z.infer<(typeof workspaceTables)['hypotheses']>
+/** A current-version hypothesis with its evidence tally and the status the evidence suggests. */
+export type Hypothesis = HypothesisRow & { tally: Tally; suggested: HypothesisStatus }
+/** One interview's verdict on a hypothesis, for the drill-down. */
+export type EvidenceLink = EvidenceItem & { interview_id: string; date: string; contact_name: string | null }
