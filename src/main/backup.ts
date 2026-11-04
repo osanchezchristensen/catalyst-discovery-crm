@@ -47,6 +47,14 @@ export function backupBeforeMigration(db: Database.Database, dir: string, from: 
   return file
 }
 
+/** A restore point before "Reset workspace". Never pruned, like pre-migration backups. */
+export function backupBeforeReset(db: Database.Database, dir: string): string {
+  mkdirSync(dir, { recursive: true })
+  const file = join(dir, `pre-reset-${stamp(new Date())}.sqlite`)
+  snapshot(db, file)
+  return file
+}
+
 export function isBackupDue(db: Database.Database, at = new Date()): boolean {
   const last = getMeta(db, 'last_backup_at')
   return !last || at.getTime() - new Date(last).getTime() >= DAY_MS

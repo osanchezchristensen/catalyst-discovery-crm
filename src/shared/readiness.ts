@@ -1,8 +1,9 @@
 // The PRD readiness checklist (drives the viability dashboard). Pure, so it is easy to test.
 import type { Tally } from './evidence'
+import type { Thresholds } from './schema'
 
-/** PRD defaults. shortcut: fixed for every cohort; make editable with Settings once program staff confirm them. */
-export const THRESHOLDS = {
+/** PRD defaults; a cohort can override them in Settings (stored in cohorts.settings.readiness). */
+export const DEFAULT_THRESHOLDS: Thresholds = {
   segments: 3,
   beachheadInterviews: 10,
   riskiest: 3,
@@ -10,7 +11,7 @@ export const THRESHOLDS = {
   painScore: 4,
   painShare: 0.6,
   wtpSignals: 3
-} as const
+}
 
 export type ReadinessInput = {
   segments: { id: string; is_beachhead: boolean }[]
@@ -26,8 +27,10 @@ const plural = (n: number, word: string) => `${n} ${word}${n === 1 ? '' : 's'}`
 /** "7 of 10" below the goal, "11 (goal: 10)" past it. */
 const ofGoal = (n: number, goal: number) => (n < goal ? `${n} of ${goal}` : `${n} (goal: ${goal})`)
 
-export function readiness({ segments, interviews, hypotheses, decisions }: ReadinessInput): ReadinessItem[] {
-  const T = THRESHOLDS
+export function readiness(
+  { segments, interviews, hypotheses, decisions }: ReadinessInput,
+  T: Thresholds = DEFAULT_THRESHOLDS
+): ReadinessItem[] {
   const beachhead = segments.find((s) => s.is_beachhead)
   const inBeachhead = beachhead ? interviews.filter((i) => i.segment_id === beachhead.id) : []
   const painful = inBeachhead.filter((i) => (i.pain_score ?? 0) >= T.painScore).length

@@ -3,9 +3,9 @@ import type Database from 'better-sqlite3'
 import type { z } from 'zod'
 import { suggestStatus, type Tally } from '../../shared/evidence'
 import { addDays, today, weekStart } from '../../shared/dates'
-import { readiness } from '../../shared/readiness'
+import { DEFAULT_THRESHOLDS, readiness } from '../../shared/readiness'
 import { streak } from '../../shared/streak'
-import { hypothesisSnapshot } from '../../shared/schema'
+import { hypothesisSnapshot, thresholdsInput, type Thresholds } from '../../shared/schema'
 import type {
   Contact,
   ContactStage,
@@ -602,7 +602,7 @@ export function getDashboard(db: DB): Dashboard {
     hasBeachhead: !!beachhead,
     hypotheses,
     decisions,
-    readiness: readiness({ segments, interviews, hypotheses, decisions }),
+    readiness: readiness({ segments, interviews, hypotheses, decisions }, getThresholds(db)),
     topTags: v ? topTags(db, v) : []
   }
 }
@@ -792,4 +792,47 @@ export function saveGuide(db: DB, input: GuideSave): Guide {
 
 export function deleteGuide(db: DB, id: string): void {
   db.prepare('DELETE FROM guides WHERE id = ? AND venture_id = ?').run(id, requireVenture(db))
+}
+
+// ---- Readiness thresholds, stored in the venture's cohort so they travel with exports ----
+const settingsOf = (text: string): Record<string, unknown> => {
+  const raw = parseJson(text)
+  return raw && typeof raw === 'object' && !Array.isArray(raw) ? (raw as Record<string, unknown>) : {}
+}
+
+/** The cohort's thresholds, or the PRD defaults. Malformed imported settings fall back to the defaults. */
+export function getThresholds(db: DB): Thresholds {
+  const v = activeVentureId(db)
+  const text = v
+    ? (db.prepare('SELECT c.settings FROM ventures v JOIN cohorts c ON c.id = v.cohort_id WHERE v.id = ?').pluck().get(v) as
+        | string
+        | undefined)
+    : undefined
+  const saved = text ? settingsOf(text).readiness : undefined
+  const parsed = thresholdsInput.safeParse({ ...DEFAULT_THRESHOLDS, ...(saved && typeof saved === 'object' ? saved : {}) })
+  return parsed.success ? parsed.data : DEFAULT_THRESHOLDS
+}
+
+/** Saves thresholds into the venture's cohort, creating one if the venture has none. Other settings keys are kept. */
+export function saveThresholds(db: DB, thresholds: Thresholds): Thresholds {
+  const v = requireVenture(db)
+  const t = now()
+  db.transaction(() => {
+    let cohortId = db.prepare('SELECT cohort_id FROM ventures WHERE id = ?').pluck().get(v) as string | null
+    if (!cohortId) {
+      cohortId = randomUUID()
+      const semester = db.prepare('SELECT semester FROM ventures WHERE id = ?').pluck().get(v) as string
+      db.prepare(
+        "INSERT INTO cohorts (id, name, semester, settings, created_at, updated_at) VALUES (?, ?, ?, '{}', ?, ?)"
+      ).run(cohortId, semester || 'My cohort', semester, t, t)
+      db.prepare('UPDATE ventures SET cohort_id = ?, updated_at = ? WHERE id = ?').run(cohortId, t, v)
+    }
+    const settings = settingsOf(db.prepare('SELECT settings FROM cohorts WHERE id = ?').pluck().get(cohortId) as string)
+    db.prepare('UPDATE cohorts SET settings = ?, updated_at = ? WHERE id = ?').run(
+      JSON.stringify({ ...settings, readiness: thresholds }),
+      t,
+      cohortId
+    )
+  })()
+  return getThresholds(db)
 }

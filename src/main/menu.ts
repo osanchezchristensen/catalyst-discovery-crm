@@ -41,6 +41,15 @@ export function buildMenu(ctx: Ctx, actions: Actions, isDev: boolean): Menu {
               return null
             })
         },
+        {
+          label: 'Export CSV…',
+          click: () =>
+            run(async () => {
+              const r = await actions.exportCsv({ includeContactDetails: false })
+              return 'path' in r ? `CSV files saved in ${r.path}` : null
+            })
+        },
+        { label: 'Import Contacts from CSV…', click: () => ctx.send({ type: 'import-contacts' }) },
         { type: 'separator' },
         { label: 'Back Up Now', click: () => run(() => (actions.backupNow(undefined), 'Backup saved')) },
         { label: 'Open Data Folder', click: () => run(async () => (await actions.openDataFolder(undefined), null)) },

@@ -1,5 +1,9 @@
 // The typed IPC contract. Each invoke method's name is also its IPC channel.
 import type {
+  Attachment,
+  ContactField,
+  ContactImportRequest,
+  Thresholds,
   Contact,
   ContactInput,
   ContactStage,
@@ -38,6 +42,16 @@ export type ImportPreview = {
 }
 export type ImportResult = { counts: Partial<Record<WorkspaceTable, TableCounts>> }
 
+export type ContactCsvFile = {
+  token: string
+  fileName: string
+  headers: string[]
+  sample: string[][]
+  rowCount: number
+  mapping: Partial<Record<ContactField, number | null>>
+}
+export type ContactImportPreview = { add: number; duplicates: number; noName: number; invalid: { row: number; message: string }[] }
+
 export type StatusTone = 'success' | 'error'
 export type AppEvent =
   | { type: 'about' }
@@ -45,6 +59,7 @@ export type AppEvent =
   | { type: 'status'; tone: StatusTone; message: string }
   | { type: 'data-changed' }
   | { type: 'log-interview' }
+  | { type: 'import-contacts' }
 
 export interface InvokeApi {
   getAppInfo(): Promise<AppInfo>
@@ -83,7 +98,20 @@ export interface InvokeApi {
   saveGuide(input: GuideInput): Promise<Guide>
   deleteGuide(id: string): Promise<void>
   backupNow(): Promise<{ at: string }>
-  exportWorkspace(): Promise<{ path: string } | Canceled>
+  exportWorkspace(opts?: { includeContactDetails: boolean }): Promise<{ path: string } | Canceled>
+  exportCsv(opts: { includeContactDetails: boolean }): Promise<{ path: string } | Canceled>
+  pickContactsCsv(): Promise<ContactCsvFile | Canceled>
+  previewContactImport(req: ContactImportRequest): Promise<ContactImportPreview>
+  applyContactImport(req: ContactImportRequest): Promise<{ added: number }>
+  cancelContactImport(token: string): Promise<void>
+  getThresholds(): Promise<Thresholds>
+  saveThresholds(t: Thresholds): Promise<Thresholds>
+  addAttachment(interviewId: string): Promise<Attachment | Canceled>
+  listAttachments(interviewId: string): Promise<Attachment[]>
+  openAttachment(id: string): Promise<void>
+  showAttachment(id: string): Promise<void>
+  deleteAttachment(id: string): Promise<void>
+  resetWorkspace(confirmName: string): Promise<{ backup: string }>
   pickImport(): Promise<ImportPreview | Canceled>
   applyImport(token: string): Promise<ImportResult>
   cancelImport(token: string): Promise<void>
@@ -127,6 +155,19 @@ export const INVOKE_CHANNELS = [
   'deleteGuide',
   'backupNow',
   'exportWorkspace',
+  'exportCsv',
+  'pickContactsCsv',
+  'previewContactImport',
+  'applyContactImport',
+  'cancelContactImport',
+  'getThresholds',
+  'saveThresholds',
+  'addAttachment',
+  'listAttachments',
+  'openAttachment',
+  'showAttachment',
+  'deleteAttachment',
+  'resetWorkspace',
   'pickImport',
   'applyImport',
   'cancelImport'
