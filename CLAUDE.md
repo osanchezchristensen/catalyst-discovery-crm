@@ -24,10 +24,14 @@ Electron, Vite, React, TypeScript, Tailwind, shadcn/ui, Recharts, Lucide icons.
 - Testing: Vitest. Packaging: electron-builder (dmg, nsis, AppImage).
 
 ## Commands
-<!-- Fill in after Phase 1 scaffolding -->
-- `npm run dev`:
-- `npm run typecheck` / `npm run lint` / `npm test`:
-- `npm run dist`:
+- `npm run dev`: start the app with hot reload. Uses its own data folder, `Catalyst Discovery CRM (dev)`, so real data is never touched.
+- `npm run typecheck` / `npm run lint` / `npm test`: TypeScript (main + renderer), ESLint (with jsx-a11y), Vitest. Run all three before every commit.
+- `npm run build`: production build into `out/`.
+- `npm run dist`: build, then package installers into `release/<version>/` with electron-builder (NSIS on Windows, universal dmg on macOS, AppImage on Linux). Build each OS's installer on that OS.
+
+Notes:
+- better-sqlite3 ships N-API prebuilds for every platform, so there is no native rebuild step. Its install script is denied in `package.json#allowScripts`.
+- Data-layer tests run on an in-memory SQLite database (`src/main/test-helpers.ts`).
 
 ## How we work
 1. Build the PRD roadmap one phase at a time, on branch `phase-N-<name>`.

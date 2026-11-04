@@ -1,0 +1,183 @@
+import { useCallback, useEffect, useState } from 'react'
+import type { ImportPreview } from '../../shared/api'
+import type { Profile, VentureBundle } from '../../shared/schema'
+import { AboutDialog } from '@/components/AboutDialog'
+import { ImportPreviewDialog } from '@/components/ImportPreviewDialog'
+import { Sidebar, type Screen } from '@/components/Sidebar'
+import { StatusRegion, type Status } from '@/components/StatusRegion'
+import { Button } from '@/components/ui/button'
+import { Card } from '@/components/ui/card'
+import { errorMessage } from '@/lib/utils'
+import { Home } from '@/screens/Home'
+import { VentureOverview } from '@/screens/VentureOverview'
+import { Welcome } from '@/screens/Welcome'
+
+const TITLES: Record<Screen, string> = { home: 'Home', venture: 'Venture' }
+const api = window.api
+
+export default function App() {
+  const [loaded, setLoaded] = useState(false)
+  const [loadError, setLoadError] = useState<string | null>(null)
+  const [profile, setProfile] = useState<Profile | null>(null)
+  const [venture, setVenture] = useState<VentureBundle | null>(null)
+  const [lastBackupAt, setLastBackupAt] = useState<string | null>(null)
+  const [screen, setScreen] = useState<Screen>('home')
+  const [status, setStatus] = useState<Status | null>(null)
+  const [aboutOpen, setAboutOpen] = useState(false)
+  const [preview, setPreview] = useState<ImportPreview | null>(null)
+  const [unsaved, setUnsaved] = useState(false)
+  // Bumped on every reload so the venture form drops its draft for the fresh data (e.g. after an import).
+  const [loads, setLoads] = useState(0)
+
+  const notify = useCallback(
+    (tone: Status['tone'], message: string) => setStatus({ tone, message, key: Date.now() }),
+    []
+  )
+  const onError = useCallback((err: unknown) => notify('error', errorMessage(err)), [notify])
+  const dismiss = useCallback(() => setStatus(null), [])
+
+  const load = useCallback(
+    () =>
+      Promise.all([api.getProfile(), api.getActiveVenture(), api.getAppInfo()])
+        .then(([p, v, info]) => {
+          setProfile(p)
+          setVenture(v)
+          setLoads((n) => n + 1)
+          setLastBackupAt(info.lastBackupAt)
+          setLoadError(null)
+          setLoaded(true)
+        })
+        .catch((err: unknown) => {
+          // Never fall through to Welcome on a failed first load: it would create a second venture.
+          setLoadError(errorMessage(err))
+          onError(err)
+        }),
+    [onError]
+  )
+
+  useEffect(() => {
+    void load()
+    return api.onEvent((event) => {
+      switch (event.type) {
+        case 'about':
+          setAboutOpen(true)
+          break
+        case 'import-preview':
+          setPreview(event.preview)
+          break
+        case 'status':
+          notify(event.tone, event.message)
+          if (event.tone === 'success') void api.getAppInfo().then((i) => setLastBackupAt(i.lastBackupAt))
+          break
+        case 'data-changed':
+          void load()
+          break
+      }
+    })
+  }, [load, notify])
+
+  // Only the venture form holds unsaved edits; ask before leaving it.
+  // Closing the window is caught here; main asks the user (will-prevent-unload).
+  useEffect(() => {
+    if (!unsaved) return
+    const block = (e: BeforeUnloadEvent) => e.preventDefault()
+    window.addEventListener('beforeunload', block)
+    return () => window.removeEventListener('beforeunload', block)
+  }, [unsaved])
+  const navigate = (next: Screen) => {
+    if (next === screen) return
+    if (unsaved && !window.confirm('You have unsaved changes to your venture. Leave without saving?')) return
+    setScreen(next)
+  }
+  const pickImport = async () => {
+    try {
+      const r = await api.pickImport()
+      if ('token' in r) setPreview(r)
+    } catch (err) {
+      onError(err)
+    }
+  }
+  const backup = async () => {
+    try {
+      setLastBackupAt((await api.backupNow()).at)
+      notify('success', 'Backup saved')
+    } catch (err) {
+      onError(err)
+    }
+  }
+
+  const dialogs = (
+    <>
+      <AboutDialog open={aboutOpen} onOpenChange={setAboutOpen} onError={onError} />
+      <ImportPreviewDialog
+        preview={preview}
+        unsaved={unsaved}
+        onClose={() => setPreview(null)}
+        onApplied={(m) => notify('success', m)}
+        onError={onError}
+      />
+      <StatusRegion status={status} onDismiss={dismiss} />
+    </>
+  )
+
+  if (!loaded) {
+    if (!loadError) return null
+    return (
+      <main className="flex min-h-full items-center justify-center p-6">
+        <Card className="w-full max-w-md">
+          <h1 className="font-heading text-2xl font-semibold">Your data couldn’t be opened</h1>
+          <p className="mt-2 break-words">{loadError}</p>
+          <Button className="mt-4" onClick={() => void load()}>
+            Try again
+          </Button>
+        </Card>
+      </main>
+    )
+  }
+
+  if (!profile || !venture) {
+    return (
+      <>
+        <Welcome profile={profile} hasVenture={!!venture} onDone={load} onImport={pickImport} onError={onError} />
+        {dialogs}
+      </>
+    )
+  }
+
+  return (
+    <div className="flex h-full">
+      <button
+        type="button"
+        onClick={() => document.getElementById('main')?.focus()}
+        className="sr-only z-50 rounded-md bg-primary px-4 py-2 text-primary-foreground focus:not-sr-only focus:fixed focus:top-2 focus:left-2"
+      >
+        Skip to main content
+      </button>
+      <Sidebar screen={screen} onNavigate={navigate} ventureName={venture.venture.name} />
+      <div className="flex min-w-0 flex-1 flex-col">
+        <header className="flex h-16 shrink-0 items-center gap-4 border-b border-border bg-card px-6">
+          <h1 className="font-heading text-2xl font-semibold">{TITLES[screen]}</h1>
+        </header>
+        <main id="main" tabIndex={-1} className="relative flex-1 scroll-pb-24 overflow-auto">
+          <div className="mx-auto max-w-[1280px] p-6">
+            {screen === 'home' ? (
+              <Home lastBackupAt={lastBackupAt} onBackup={backup} onSetUpVenture={() => navigate('venture')} />
+            ) : (
+              <VentureOverview
+                key={`${loads}-${venture.venture.updated_at}`}
+                bundle={venture}
+                onSaved={(b) => {
+                  setVenture(b)
+                  notify('success', 'Venture saved')
+                }}
+                onError={onError}
+                onDirtyChange={setUnsaved}
+              />
+            )}
+          </div>
+        </main>
+      </div>
+      {dialogs}
+    </div>
+  )
+}
