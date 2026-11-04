@@ -6,7 +6,11 @@ import { basename, join } from 'node:path'
 import type { z } from 'zod'
 import type { AppEvent, InvokeApi } from '../shared/api'
 import {
+  contactInput,
+  contactStageInput,
+  idInput,
   importToken,
+  interviewInput,
   profileInput,
   ventureBundleInput,
   ventureCreateInput,
@@ -61,6 +65,14 @@ export function createActions(ctx: Ctx): Actions {
     createVenture: (arg) =>
       repo.createVenture(db, parse(ventureCreateInput, arg), repo.getProfile(db)?.full_name ?? ''),
     saveVenture: (arg) => repo.saveVenture(db, parse(ventureBundleInput, arg)),
+    listContacts: () => repo.listContacts(db),
+    saveContact: (arg) => repo.saveContact(db, parse(contactInput, arg)),
+    setContactStage: (arg) => repo.setContactStage(db, parse(contactStageInput, arg)),
+    deleteContact: (arg) => repo.deleteContact(db, parse(idInput, arg)),
+    listInterviews: () => repo.listInterviews(db),
+    getInterview: (arg) => repo.getInterview(db, parse(idInput, arg)),
+    saveInterview: (arg) => repo.saveInterview(db, parse(interviewInput, arg)),
+    deleteInterview: (arg) => repo.deleteInterview(db, parse(idInput, arg)),
     backupNow: () => {
       const at = new Date()
       backupNow(db, ctx.backupsDir, at, 'manual')

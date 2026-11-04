@@ -1,5 +1,10 @@
 // The typed IPC contract. Each invoke method's name is also its IPC channel.
 import type {
+  Contact,
+  ContactInput,
+  ContactStage,
+  Interview,
+  InterviewInput,
   Profile,
   ProfileInput,
   VentureBundle,
@@ -26,6 +31,7 @@ export type AppEvent =
   | { type: 'import-preview'; preview: ImportPreview }
   | { type: 'status'; tone: StatusTone; message: string }
   | { type: 'data-changed' }
+  | { type: 'log-interview' }
 
 export interface InvokeApi {
   getAppInfo(): Promise<AppInfo>
@@ -35,6 +41,14 @@ export interface InvokeApi {
   getActiveVenture(): Promise<VentureBundle | null>
   createVenture(input: VentureCreateInput): Promise<VentureBundle>
   saveVenture(input: VentureBundleInput): Promise<VentureBundle>
+  listContacts(): Promise<Contact[]>
+  saveContact(input: ContactInput): Promise<Contact>
+  setContactStage(input: { id: string; stage: ContactStage }): Promise<void>
+  deleteContact(id: string): Promise<void>
+  listInterviews(): Promise<Interview[]>
+  getInterview(id: string): Promise<Interview | null>
+  saveInterview(input: InterviewInput): Promise<Interview>
+  deleteInterview(id: string): Promise<void>
   backupNow(): Promise<{ at: string }>
   exportWorkspace(): Promise<{ path: string } | Canceled>
   pickImport(): Promise<ImportPreview | Canceled>
@@ -50,6 +64,14 @@ export const INVOKE_CHANNELS = [
   'getActiveVenture',
   'createVenture',
   'saveVenture',
+  'listContacts',
+  'saveContact',
+  'setContactStage',
+  'deleteContact',
+  'listInterviews',
+  'getInterview',
+  'saveInterview',
+  'deleteInterview',
   'backupNow',
   'exportWorkspace',
   'pickImport',

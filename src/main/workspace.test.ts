@@ -1,6 +1,7 @@
 import { randomUUID } from 'node:crypto'
 import { describe, expect, it } from 'vitest'
-import { createVenture, getActiveVenture, saveProfile, saveVenture } from './db/repo'
+import { createVenture, getActiveVenture, listContacts, listInterviews, saveInterview, saveProfile, saveVenture } from './db/repo'
+import { interviewInput } from '../shared/schema'
 import { migrations } from './db/migrations'
 import { testDb } from './test-helpers'
 import { ImportError, applyImport, exportWorkspace, parseWorkspace, previewImport } from './workspace'
@@ -64,6 +65,20 @@ describe('import merge', () => {
     applyImport(target, file)
     expect(getActiveVenture(target)?.venture.id).toBe(ventureId)
     expect(target.prepare('SELECT COUNT(*) FROM contacts').pluck().get()).toBe(1)
+  })
+
+  it('round-trips contacts and interviews with decoded fields intact', () => {
+    const { db } = seeded()
+    const [pat] = listContacts(db)
+    saveInterview(db, interviewInput.parse({
+      contact_id: pat.id, date: '2026-11-03', format: 'phone', interviewers: ['Sam'], quotes: 'Too slow', pain_score: 5,
+      wtp_signal: 'Would pilot', next_step: '', follow_up_date: '2026-11-10',
+      notes: { behavior: 'a', pains: 'b', solutions: 'c', budget: 'd' }
+    }))
+    const target = testDb()
+    applyImport(target, roundTrip(exportWorkspace(db, { ...opts, includeContactDetails: true })))
+    expect(listInterviews(target)).toEqual(listInterviews(db))
+    expect(listContacts(target)).toEqual(listContacts(db))
   })
 
   it('replaces a row only when the incoming copy is newer', () => {

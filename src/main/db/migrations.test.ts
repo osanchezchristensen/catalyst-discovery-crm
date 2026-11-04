@@ -63,6 +63,17 @@ describe('migrate', () => {
     })
   })
 
+  it('v3 drops the Guide tables and keeps everything else', () => {
+    const db = fresh()
+    migrate(db, migrations.slice(0, 2))
+    db.prepare("INSERT INTO meta (key, value) VALUES ('keep', 'me')").run()
+    migrate(db, migrations.slice(0, 3))
+    const tables = db.prepare("SELECT name FROM sqlite_master WHERE type = 'table'").pluck().all()
+    expect(tables).not.toContain('guide_assignments')
+    expect(tables).not.toContain('comments')
+    expect(db.prepare("SELECT value FROM meta WHERE key = 'keep'").pluck().get()).toBe('me')
+  })
+
   it('refuses a database from a newer app version', () => {
     const db = fresh()
     db.pragma(`user_version = ${migrations.length + 1}`)

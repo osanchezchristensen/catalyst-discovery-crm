@@ -10,7 +10,6 @@ const LABELS: Record<WorkspaceTable, string> = {
   cohorts: 'Cohorts',
   ventures: 'Ventures',
   venture_members: 'Team members',
-  guide_assignments: 'Guide assignments',
   segments: 'Segments',
   contacts: 'Contacts',
   interviews: 'Interviews',
@@ -18,7 +17,6 @@ const LABELS: Record<WorkspaceTable, string> = {
   evidence: 'Evidence links',
   insights: 'Insights',
   decisions: 'Decisions',
-  comments: 'Comments',
   tasks: 'Tasks'
 }
 

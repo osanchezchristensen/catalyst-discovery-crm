@@ -8,11 +8,14 @@ import { StatusRegion, type Status } from '@/components/StatusRegion'
 import { Button } from '@/components/ui/button'
 import { Card } from '@/components/ui/card'
 import { errorMessage } from '@/lib/utils'
+import { Contacts } from '@/screens/Contacts'
 import { Home } from '@/screens/Home'
+import { InterviewEditor } from '@/screens/InterviewEditor'
+import { Interviews } from '@/screens/Interviews'
 import { VentureOverview } from '@/screens/VentureOverview'
 import { Welcome } from '@/screens/Welcome'
 
-const TITLES: Record<Screen, string> = { home: 'Home', venture: 'Venture' }
+const TITLES: Record<Screen, string> = { home: 'Home', venture: 'Venture', contacts: 'Contacts', interviews: 'Interviews' }
 const api = window.api
 
 export default function App() {
@@ -26,6 +29,8 @@ export default function App() {
   const [aboutOpen, setAboutOpen] = useState(false)
   const [preview, setPreview] = useState<ImportPreview | null>(null)
   const [unsaved, setUnsaved] = useState(false)
+  // The interview being edited (id null = new); `n` gives each open a fresh editor.
+  const [editing, setEditing] = useState<{ id: string | null; n: number } | null>(null)
   // Bumped on every reload so the venture form drops its draft for the fresh data (e.g. after an import).
   const [loads, setLoads] = useState(0)
 
@@ -35,6 +40,16 @@ export default function App() {
   )
   const onError = useCallback((err: unknown) => notify('error', errorMessage(err)), [notify])
   const dismiss = useCallback(() => setStatus(null), [])
+
+  // Also used by the menu shortcut (Ctrl/Cmd+N); the event listener re-subscribes when it changes.
+  const openInterview = useCallback(
+    (id: string | null) => {
+      if (unsaved && !window.confirm('You have unsaved changes. Leave without saving?')) return
+      setScreen('interviews')
+      setEditing({ id, n: Date.now() })
+    },
+    [unsaved]
+  )
 
   const load = useCallback(
     () =>
@@ -57,6 +72,10 @@ export default function App() {
 
   useEffect(() => {
     void load()
+  }, [load])
+
+  // Kept apart from the initial load: this re-subscribes whenever openInterview changes.
+  useEffect(() => {
     return api.onEvent((event) => {
       switch (event.type) {
         case 'about':
@@ -72,11 +91,14 @@ export default function App() {
         case 'data-changed':
           void load()
           break
+        case 'log-interview':
+          openInterview(null)
+          break
       }
     })
-  }, [load, notify])
+  }, [load, notify, openInterview])
 
-  // Only the venture form holds unsaved edits; ask before leaving it.
+  // The venture form and the interview editor report unsaved edits; ask before leaving them.
   // Closing the window is caught here; main asks the user (will-prevent-unload).
   useEffect(() => {
     if (!unsaved) return
@@ -84,11 +106,15 @@ export default function App() {
     window.addEventListener('beforeunload', block)
     return () => window.removeEventListener('beforeunload', block)
   }, [unsaved])
+  const confirmLeave = () => !unsaved || window.confirm('You have unsaved changes. Leave without saving?')
   const navigate = (next: Screen) => {
-    if (next === screen) return
-    if (unsaved && !window.confirm('You have unsaved changes to your venture. Leave without saving?')) return
+    if (next === screen && !editing) return
+    if (!confirmLeave()) return
+    setEditing(null)
     setScreen(next)
   }
+  const toastSuccess = useCallback((m: string) => notify('success', m), [notify])
+  const closeEditor = useCallback(() => setEditing(null), [])
   const pickImport = async () => {
     try {
       const r = await api.pickImport()
@@ -161,7 +187,27 @@ export default function App() {
         <main id="main" tabIndex={-1} className="relative flex-1 scroll-pb-24 overflow-auto">
           <div className="mx-auto max-w-[1280px] p-6">
             {screen === 'home' ? (
-              <Home lastBackupAt={lastBackupAt} onBackup={backup} onSetUpVenture={() => navigate('venture')} />
+              <Home key={loads} lastBackupAt={lastBackupAt} onBackup={backup} onOpenInterview={openInterview} onError={onError} />
+            ) : screen === 'contacts' ? (
+              <Contacts
+                key={loads}
+                segments={venture.segments}
+                onOpenInterview={openInterview}
+                onNotify={toastSuccess}
+                onError={onError}
+              />
+            ) : screen === 'interviews' && editing ? (
+              <InterviewEditor
+                key={`${loads}-${editing.n}`}
+                id={editing.id}
+                team={venture.members.map((m) => m.name)}
+                onBack={closeEditor}
+                onDirtyChange={setUnsaved}
+                onNotify={toastSuccess}
+                onError={onError}
+              />
+            ) : screen === 'interviews' ? (
+              <Interviews key={loads} onOpen={openInterview} onError={onError} />
             ) : (
               <VentureOverview
                 key={`${loads}-${venture.venture.updated_at}`}

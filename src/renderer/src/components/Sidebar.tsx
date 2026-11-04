@@ -1,13 +1,15 @@
-import { House, Rocket, type LucideIcon } from 'lucide-react'
+import { House, MessagesSquare, Rocket, Users, type LucideIcon } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { Wordmark } from './Wordmark'
 
-export type Screen = 'home' | 'venture'
+export type Screen = 'home' | 'venture' | 'contacts' | 'interviews'
 type NavItem = { id: Screen; label: string; icon: LucideIcon }
 
 const NAV: NavItem[] = [
   { id: 'home', label: 'Home', icon: House },
-  { id: 'venture', label: 'Venture', icon: Rocket }
+  { id: 'venture', label: 'Venture', icon: Rocket },
+  { id: 'contacts', label: 'Contacts', icon: Users },
+  { id: 'interviews', label: 'Interviews', icon: MessagesSquare }
 ]
 
 export function Sidebar({
