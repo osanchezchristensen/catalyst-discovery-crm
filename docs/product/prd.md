@@ -50,7 +50,7 @@ The app has no telemetry, so these metrics are measured from exported workspace 
 
 | # | Feature | What it does | Priority |
 | --- | --- | --- | --- |
-| F1 | Local workspace (no sign-in) | Opens straight into the app. First launch asks for your name and venture. Data is stored in a SQLite file in the OS app-data folder. A header switch toggles Founder view and Guide view. Export and import the whole workspace as JSON for backups, moving computers and sharing with a Guide | P0 |
+| F1 | Local workspace (no sign-in) | Opens straight into the app. First launch asks for your name and venture. Data is stored in a SQLite file in the OS app-data folder. Export and import the whole workspace as JSON for backups, moving computers and sharing with a Guide | P0 |
 | F2 | Venture workspace | Venture name, one-line pitch, problem statement, target segments, Catalyst stage, semester, team member names | P0 |
 | F3 | Contacts pipeline | People to interview: name, role, organization, segment, source (warm intro, LinkedIn, event, cold), tags, consent to follow up. Kanban stages: Identified → Reached out → Scheduled → Interviewed → Follow-up → Closed | P0 |
 | F4 | Interview log | Date, contact, interviewers, format (in person, video, phone), structured notes (current behavior, pains, current solutions, budget and willingness-to-pay signals), key quotes, pain intensity 1–5, next step, follow-up date | P0 |
@@ -80,7 +80,7 @@ These thresholds are defaults that can be edited per cohort. Confirm them with p
 
 | Table | Key fields | Relations |
 | --- | --- | --- |
-| profiles | id, full_name, email (optional), stage, view_mode (founder or guide) | single local user record |
+| profiles | id, full_name, email (optional), stage | single local user record |
 | cohorts | id, name, semester, start_date, end_date, settings (checklist thresholds) | has ventures |
 | ventures | id, cohort_id, name, pitch, problem, stage, status, created_by | belongs to cohort |
 | venture_members | venture_id, name, role (owner, member) | team names on a venture |
@@ -106,7 +106,7 @@ All ids are UUIDs, so workspaces from different computers can merge on import. A
   - Linux: `~/.config/Catalyst Discovery CRM`
 - Nothing is sent over the network.
 - The database is backed up automatically to `backups/` on launch and once a day. The last 14 backups are kept.
-- Founder view and Guide view are view modes, not a security boundary. Anyone at the computer can see the data.
+- Anyone at the computer can see the data.
 - **Workspace export:** the full workspace exports as JSON (plus CSV per table). This is how a founder hands a venture to a Guide or moves to another computer. Exports leave out interviewee emails and phone numbers by default.
 - **Import:** imported files are untrusted input. Validate them against a schema and preview the changes before merging.
 - **Consent:** every contact has a consent checkbox and can be deleted on request.
@@ -124,12 +124,12 @@ All ids are UUIDs, so workspaces from different computers can merge on import. A
 | Hypotheses | Founder, Guide | Cards grouped by type with status chip, risk and evidence tally; drill into linked interviews |
 | Viability dashboard | Founder, Guide | Charts, scorecard, readiness checklist, decision log |
 | Cohort view | Guide, Admin | Imported ventures: interviews this week, total, validated and invalidated counts, checklist %, needs-help flag, last activity |
-| Settings | All | Profile, view mode, cohort thresholds, export and import, backups, open data folder, reset workspace |
+| Settings | All | Profile, cohort thresholds, export and import, backups, open data folder, reset workspace |
 
 ## Core flows
 1. **Onboarding:** open the app → enter your name → create a venture or import a workspace file → add 1–3 segments → write 3 starter hypotheses from a template → set a weekly interview goal.
 2. **Log an interview:** press "Log interview" (Ctrl/Cmd+N) → pick or quick-add a contact → fill in the structured notes → for each open hypothesis, choose Supports, Refutes or Neutral → highlight insights → set the next step and follow-up date → save. The contact moves to Interviewed.
-3. **Guide check-in:** founder exports a workspace file → Guide imports it → switches to Guide view → opens Cohort view → sorts by last activity or needs-help → opens the venture dashboard → leaves comments and a check-in note → exports the comments back to the founder.
+3. **Guide check-in:** founder exports a workspace file → Guide imports it → opens Cohort view → sorts by last activity or needs-help → opens the venture dashboard → leaves comments and a check-in note → exports the comments back to the founder.
 4. **Viability decision:** founder reviews the dashboard → completes the checklist → records Persevere, Pivot, Pause or Stop with a rationale. A pivot copies the hypotheses into a new version.
 
 ## Non-functional requirements
@@ -147,7 +147,7 @@ All ids are UUIDs, so workspaces from different computers can merge on import. A
 - **Stack:** Electron, Vite, React, TypeScript, Tailwind, shadcn/ui, Recharts, Lucide, better-sqlite3, Vitest, electron-builder.
 
 ## Build roadmap (one Claude Code session per phase)
-1. **Phase 1 — Foundation:** Electron shell, SQLite with migrations, typed IPC, brand tokens, layout and sidebar, welcome screen, Founder/Guide switch, venture workspace, JSON export/import, automatic backups (F1, F2).
+1. **Phase 1 — Foundation:** Electron shell, SQLite with migrations, typed IPC, brand tokens, layout and sidebar, welcome screen, venture workspace, JSON export/import, automatic backups (F1, F2).
 2. **Phase 2 — Discovery core:** segments, contacts Kanban, interview log with autosave (F3, F4).
 3. **Phase 3 — Evidence:** hypotheses board and evidence linking (F5, F6).
 4. **Phase 4 — Viability:** dashboard, readiness checklist, decision log (F7, F8).
