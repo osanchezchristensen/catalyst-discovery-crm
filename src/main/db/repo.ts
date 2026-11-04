@@ -1,6 +1,12 @@
 import { randomUUID } from 'node:crypto'
 import type Database from 'better-sqlite3'
+import type { z } from 'zod'
 import type {
+  Contact,
+  ContactStage,
+  contactInput,
+  Interview,
+  interviewInput,
   Member,
   Profile,
   ProfileInput,
@@ -71,12 +77,21 @@ function loadBundle(db: DB, ventureId: string): VentureBundle | null {
 }
 
 /** The venture the app opens: the one marked active, else the oldest. */
-export function getActiveVenture(db: DB): VentureBundle | null {
+export function activeVentureId(db: DB): string | null {
   const active = getMeta(db, 'active_venture_id')
-  const bundle = active ? loadBundle(db, active) : null
-  if (bundle) return bundle
-  const first = db.prepare('SELECT id FROM ventures ORDER BY created_at LIMIT 1').pluck().get() as string | undefined
-  return first ? loadBundle(db, first) : null
+  if (active && db.prepare('SELECT 1 FROM ventures WHERE id = ?').get(active)) return active
+  return (db.prepare('SELECT id FROM ventures ORDER BY created_at LIMIT 1').pluck().get() as string | undefined) ?? null
+}
+
+export function getActiveVenture(db: DB): VentureBundle | null {
+  const id = activeVentureId(db)
+  return id ? loadBundle(db, id) : null
+}
+
+function requireVenture(db: DB): string {
+  const id = activeVentureId(db)
+  if (!id) throw new Error('Set up your venture first.')
+  return id
 }
 
 export function createVenture(db: DB, input: Required<VentureCreateInput>, createdBy: string): VentureBundle {
@@ -151,4 +166,141 @@ function replaceChildren(
     if (row.id && existing.has(row.id)) update.run({ ...params, id: row.id })
     else insert.run({ ...params, id: randomUUID() })
   }
+}
+
+// ---- Contacts (F3) and interviews (F4), always scoped to the active venture ----
+type ContactSave = z.output<typeof contactInput>
+type InterviewSave = z.output<typeof interviewInput>
+
+/** Imported rows may hold any valid JSON, so decode defensively. */
+function parseJson(text: string): unknown {
+  try {
+    return JSON.parse(text)
+  } catch {
+    return null
+  }
+}
+const strings = (v: unknown): string[] => (Array.isArray(v) ? v.filter((x): x is string => typeof x === 'string') : [])
+
+function decodeContact(row: Record<string, unknown>): Contact {
+  return { ...(row as Contact), tags: strings(parseJson(row.tags as string)), consent_followup: row.consent_followup === 1 }
+}
+
+function decodeInterview(row: Record<string, unknown>): Interview {
+  const n = parseJson(row.notes as string)
+  const o = n && typeof n === 'object' ? (n as Record<string, unknown>) : {}
+  const text = (k: string) => (typeof o[k] === 'string' ? (o[k] as string) : '')
+  return {
+    ...(row as Interview),
+    interviewers: strings(parseJson(row.interviewers as string)),
+    notes: { behavior: text('behavior'), pains: text('pains'), solutions: text('solutions'), budget: text('budget') }
+  }
+}
+
+function assertInVenture(db: DB, table: 'segments' | 'contacts', id: string | null, ventureId: string, what: string) {
+  if (id && !db.prepare(`SELECT 1 FROM ${table} WHERE id = ? AND venture_id = ?`).get(id, ventureId)) {
+    throw new Error(`That ${what} no longer exists. Reload and try again.`)
+  }
+}
+
+export function listContacts(db: DB): Contact[] {
+  const v = activeVentureId(db)
+  if (!v) return []
+  const rows = db.prepare('SELECT * FROM contacts WHERE venture_id = ? ORDER BY created_at, rowid').all(v)
+  return (rows as Record<string, unknown>[]).map(decodeContact)
+}
+
+export function saveContact(db: DB, input: ContactSave): Contact {
+  const v = requireVenture(db)
+  assertInVenture(db, 'segments', input.segment_id, v, 'segment')
+  const t = now()
+  const p = { ...input, tags: JSON.stringify(input.tags), consent_followup: input.consent_followup ? 1 : 0, v, t }
+  let id = input.id
+  if (id) {
+    const changed = db
+      .prepare(
+        `UPDATE contacts SET segment_id = @segment_id, name = @name, email = @email, phone = @phone, role = @role,
+         organization = @organization, source = @source, stage = @stage, tags = @tags,
+         consent_followup = @consent_followup, notes = @notes, updated_at = @t
+         WHERE id = @id AND venture_id = @v`
+      )
+      .run(p).changes
+    if (!changed) throw new Error('That contact no longer exists. Reload and try again.')
+  } else {
+    id = randomUUID()
+    db.prepare(
+      `INSERT INTO contacts (id, venture_id, segment_id, name, email, phone, role, organization, source, stage, tags,
+       consent_followup, notes, created_at, updated_at)
+       VALUES (@id, @v, @segment_id, @name, @email, @phone, @role, @organization, @source, @stage, @tags,
+       @consent_followup, @notes, @t, @t)`
+    ).run({ ...p, id })
+  }
+  return decodeContact(db.prepare('SELECT * FROM contacts WHERE id = ?').get(id) as Record<string, unknown>)
+}
+
+export function setContactStage(db: DB, input: { id: string; stage: ContactStage }): void {
+  const changed = db
+    .prepare('UPDATE contacts SET stage = ?, updated_at = ? WHERE id = ? AND venture_id = ?')
+    .run(input.stage, now(), input.id, requireVenture(db)).changes
+  if (!changed) throw new Error('That contact no longer exists. Reload and try again.')
+}
+
+/** Deletes the contact (consent requests). Its interviews stay, with no contact (FK ON DELETE SET NULL). */
+export function deleteContact(db: DB, id: string): void {
+  db.prepare('DELETE FROM contacts WHERE id = ? AND venture_id = ?').run(id, requireVenture(db))
+}
+
+const INTERVIEW_SELECT = `SELECT i.*, c.name AS contact_name FROM interviews i LEFT JOIN contacts c ON c.id = i.contact_id`
+
+export function listInterviews(db: DB): Interview[] {
+  const v = activeVentureId(db)
+  if (!v) return []
+  const rows = db.prepare(`${INTERVIEW_SELECT} WHERE i.venture_id = ? ORDER BY i.date DESC, i.created_at DESC`).all(v)
+  return (rows as Record<string, unknown>[]).map(decodeInterview)
+}
+
+export function getInterview(db: DB, id: string): Interview | null {
+  const row = db.prepare(`${INTERVIEW_SELECT} WHERE i.id = ? AND i.venture_id = ?`).get(id, requireVenture(db))
+  return row ? decodeInterview(row as Record<string, unknown>) : null
+}
+
+const BEFORE_INTERVIEWED: ContactStage[] = ['identified', 'reached_out', 'scheduled']
+
+/** Creates or updates an interview. Logging one moves its contact to Interviewed (PRD flow 2). */
+export function saveInterview(db: DB, input: InterviewSave): Interview {
+  const v = requireVenture(db)
+  assertInVenture(db, 'contacts', input.contact_id, v, 'contact')
+  const t = now()
+  const p = { ...input, interviewers: JSON.stringify(input.interviewers), notes: JSON.stringify(input.notes), v, t }
+  let id = input.id
+  db.transaction(() => {
+    if (id) {
+      const changed = db
+        .prepare(
+          `UPDATE interviews SET contact_id = @contact_id, date = @date, format = @format, interviewers = @interviewers,
+           notes = @notes, quotes = @quotes, pain_score = @pain_score, wtp_signal = @wtp_signal, next_step = @next_step,
+           follow_up_date = @follow_up_date, updated_at = @t WHERE id = @id AND venture_id = @v`
+        )
+        .run(p).changes
+      if (!changed) throw new Error('That interview no longer exists. Reload and try again.')
+    } else {
+      id = randomUUID()
+      db.prepare(
+        `INSERT INTO interviews (id, venture_id, contact_id, date, format, interviewers, notes, quotes, pain_score,
+         wtp_signal, next_step, follow_up_date, created_at, updated_at)
+         VALUES (@id, @v, @contact_id, @date, @format, @interviewers, @notes, @quotes, @pain_score, @wtp_signal,
+         @next_step, @follow_up_date, @t, @t)`
+      ).run({ ...p, id })
+    }
+    if (input.contact_id) {
+      db.prepare(
+        `UPDATE contacts SET stage = 'interviewed', updated_at = ? WHERE id = ? AND stage IN (${BEFORE_INTERVIEWED.map(() => '?').join(', ')})`
+      ).run(t, input.contact_id, ...BEFORE_INTERVIEWED)
+    }
+  })()
+  return getInterview(db, id!)!
+}
+
+export function deleteInterview(db: DB, id: string): void {
+  db.prepare('DELETE FROM interviews WHERE id = ? AND venture_id = ?').run(id, requireVenture(db))
 }

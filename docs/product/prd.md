@@ -79,7 +79,6 @@ These thresholds are defaults that can be edited per cohort. Confirm them with p
 | cohorts | id, name, semester, start_date, end_date, settings (checklist thresholds) | has ventures |
 | ventures | id, cohort_id, name, pitch, problem, stage, status, created_by | belongs to cohort |
 | venture_members | venture_id, name, role (owner, member) | team names on a venture |
-| guide_assignments | venture_id, guide_name | unused since Guide tools were dropped (ADR 0002) |
 | segments | id, venture_id, name, description, is_beachhead | used by contacts and interviews |
 | contacts | id, venture_id, segment_id, name, email, phone, role, organization, source, stage, tags, consent_followup, notes | has interviews |
 | interviews | id, venture_id, contact_id, date, format, interviewers, notes (JSON), quotes, pain_score, wtp_signal, next_step, follow_up_date | links to hypotheses and insights |
@@ -87,7 +86,6 @@ These thresholds are defaults that can be edited per cohort. Confirm them with p
 | evidence | id, hypothesis_id, interview_id, verdict (supports, refutes, neutral), note | joins interviews to hypotheses |
 | insights | id, venture_id, interview_id, text, tags, is_quote | from interviews |
 | decisions | id, venture_id, decision, rationale, decided_at, evidence_ids | pivot history |
-| comments | id, entity_type, entity_id, author_name, body, created_at | unused since Guide tools were dropped (ADR 0002) |
 | tasks | id, venture_id, assignee_name, title, due_date, done, interview_id | follow-ups |
 | attachments | id, interview_id, file_name, stored_path, mime, bytes | F15 |
 | meta | key, value | schema_version, last_backup_at, workspace_id |

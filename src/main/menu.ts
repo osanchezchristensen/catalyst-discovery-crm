@@ -20,6 +20,8 @@ export function buildMenu(ctx: Ctx, actions: Actions, isDev: boolean): Menu {
     {
       label: 'File',
       submenu: [
+        { label: 'Log Interview', accelerator: 'CmdOrCtrl+N', click: () => ctx.send({ type: 'log-interview' }) },
+        { type: 'separator' },
         {
           label: 'Export Workspace…',
           accelerator: 'CmdOrCtrl+E',

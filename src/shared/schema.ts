@@ -1,4 +1,4 @@
-// Zod schemas shared by main (validation) and renderer (types only).
+// Zod schemas shared by main (the trust boundary) and renderer (types, and early field errors in forms).
 // Table schemas mirror the SQL in src/main/db/migrations.ts; a test keeps them in sync.
 import { z } from 'zod'
 
@@ -33,7 +33,6 @@ export const RISKS = ['low', 'medium', 'high'] as const
 export const HYPOTHESIS_STATUSES = ['untested', 'testing', 'validated', 'invalidated', 'mixed'] as const
 export const VERDICTS = ['supports', 'refutes', 'neutral'] as const
 export const DECISIONS = ['persevere', 'pivot', 'pause', 'stop'] as const
-export const COMMENT_TARGETS = ['interview', 'hypothesis', 'venture'] as const
 
 export const profileRow = z.object({
   id,
@@ -54,7 +53,6 @@ export const workspaceTables = {
     status: z.enum(VENTURE_STATUSES), created_by: short, ...stamps
   }),
   venture_members: z.object({ id, venture_id: id, name, role: z.enum(MEMBER_ROLES), ...stamps }),
-  guide_assignments: z.object({ id, venture_id: id, guide_name: name, ...stamps }),
   segments: z.object({ id, venture_id: id, name, description: long, is_beachhead: bool, ...stamps }),
   contacts: z.object({
     id, venture_id: id, segment_id: id.nullable(), name, email: short, phone: short, role: short,
@@ -76,9 +74,6 @@ export const workspaceTables = {
   }),
   decisions: z.object({
     id, venture_id: id, decision: z.enum(DECISIONS), rationale: long, decided_at: ts, evidence_ids: jsonText, ...stamps
-  }),
-  comments: z.object({
-    id, entity_type: z.enum(COMMENT_TARGETS), entity_id: id, author_name: name, body: long.min(1), ...stamps
   }),
   tasks: z.object({
     id, venture_id: id, assignee_name: short, title: name, due_date: date.nullable(), done: bool,
@@ -137,6 +132,22 @@ export const ventureBundleInput = z
   })
 
 export const importToken = z.uuid()
+export const idInput = id
+
+const optionalEmail = z.union([z.email('Enter a valid email or leave it blank'), z.literal('')])
+const tagList = z.array(short.min(1)).max(30)
+
+export const contactInput = workspaceTables.contacts
+  .pick({ segment_id: true, name: true, phone: true, role: true, organization: true, source: true, stage: true, notes: true })
+  .extend({ id: id.optional(), email: optionalEmail, tags: tagList, consent_followup: z.boolean() })
+
+export const contactStageInput = z.object({ id, stage: z.enum(CONTACT_STAGES) })
+
+export const interviewNotes = z.object({ behavior: long, pains: long, solutions: long, budget: long })
+
+export const interviewInput = workspaceTables.interviews
+  .pick({ contact_id: true, date: true, format: true, quotes: true, pain_score: true, wtp_signal: true, next_step: true, follow_up_date: true })
+  .extend({ id: id.optional(), interviewers: z.array(short.min(1)).max(20), notes: interviewNotes })
 
 // ---- Types ----
 export type Profile = z.infer<typeof profileRow>
@@ -147,3 +158,18 @@ export type Venture = z.infer<(typeof workspaceTables)['ventures']>
 export type Member = { id: string; name: string; role: (typeof MEMBER_ROLES)[number] }
 export type Segment = { id: string; name: string; description: string; is_beachhead: boolean }
 export type VentureBundle = { venture: Venture; members: Member[]; segments: Segment[] }
+
+export type ContactStage = (typeof CONTACT_STAGES)[number]
+export type ContactInput = z.input<typeof contactInput>
+type ContactRow = z.infer<(typeof workspaceTables)['contacts']>
+/** A contact as the app uses it: JSON and 0/1 columns decoded. */
+export type Contact = Omit<ContactRow, 'tags' | 'consent_followup'> & { tags: string[]; consent_followup: boolean }
+
+export type InterviewNotes = z.infer<typeof interviewNotes>
+export type InterviewInput = z.input<typeof interviewInput>
+type InterviewRow = z.infer<(typeof workspaceTables)['interviews']>
+export type Interview = Omit<InterviewRow, 'interviewers' | 'notes'> & {
+  interviewers: string[]
+  notes: InterviewNotes
+  contact_name: string | null
+}

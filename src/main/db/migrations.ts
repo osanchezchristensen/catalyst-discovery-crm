@@ -201,6 +201,10 @@ export const migrations: string[] = [
   `,
   /* v2: remove Guide view */ `
   ALTER TABLE profiles DROP COLUMN view_mode;
+  `,
+  /* v3: drop tables of the removed Guide tools (never written by the app; ADR 0002) */ `
+  DROP TABLE guide_assignments;
+  DROP TABLE comments;
   `
 ]
 
