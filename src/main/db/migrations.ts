@@ -205,6 +205,18 @@ export const migrations: string[] = [
   /* v3: drop tables of the removed Guide tools (never written by the app; ADR 0002) */ `
   DROP TABLE guide_assignments;
   DROP TABLE comments;
+  `,
+  /* v4: weekly interview goal (F12) and interview guides (F9); see ADR 0003 */ `
+  ALTER TABLE ventures ADD COLUMN weekly_goal INTEGER NOT NULL DEFAULT 3 CHECK (weekly_goal BETWEEN 1 AND 20);
+  CREATE TABLE guides (
+    id TEXT PRIMARY KEY,
+    venture_id TEXT NOT NULL REFERENCES ventures(id) ON DELETE CASCADE,
+    name TEXT NOT NULL,
+    questions TEXT NOT NULL DEFAULT '[]',
+    created_at TEXT NOT NULL,
+    updated_at TEXT NOT NULL
+  );
+  CREATE INDEX idx_guides_venture ON guides(venture_id);
   `
 ]
 

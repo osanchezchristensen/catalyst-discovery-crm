@@ -1,8 +1,8 @@
-import { Gauge, House, Lightbulb, MessagesSquare, Rocket, Users, type LucideIcon } from 'lucide-react'
+import { Gauge, House, Lightbulb, MessagesSquare, Rocket, Sparkles, Users, type LucideIcon } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { Wordmark } from './Wordmark'
 
-export type Screen = 'home' | 'venture' | 'contacts' | 'hypotheses' | 'interviews' | 'viability'
+export type Screen = 'home' | 'venture' | 'contacts' | 'hypotheses' | 'interviews' | 'insights' | 'viability'
 type NavItem = { id: Screen; label: string; icon: LucideIcon }
 
 const NAV: NavItem[] = [
@@ -11,6 +11,7 @@ const NAV: NavItem[] = [
   { id: 'contacts', label: 'Contacts', icon: Users },
   { id: 'hypotheses', label: 'Hypotheses', icon: Lightbulb },
   { id: 'interviews', label: 'Interviews', icon: MessagesSquare },
+  { id: 'insights', label: 'Insights', icon: Sparkles },
   { id: 'viability', label: 'Viability', icon: Gauge }
 ]
 

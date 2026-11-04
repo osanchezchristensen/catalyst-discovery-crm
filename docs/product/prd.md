@@ -77,8 +77,9 @@ These thresholds are defaults that can be edited per cohort. Confirm them with p
 | --- | --- | --- |
 | profiles | id, full_name, email (optional), stage | single local user record |
 | cohorts | id, name, semester, start_date, end_date, settings (checklist thresholds) | has ventures |
-| ventures | id, cohort_id, name, pitch, problem, stage, status, created_by | belongs to cohort |
+| ventures | id, cohort_id, name, pitch, problem, stage, status, created_by, weekly_goal | belongs to cohort |
 | venture_members | venture_id, name, role (owner, member) | team names on a venture |
+| guides | id, venture_id, name, questions (JSON) | interview guides (F9), ADR 0003 |
 | segments | id, venture_id, name, description, is_beachhead | used by contacts and interviews |
 | contacts | id, venture_id, segment_id, name, email, phone, role, organization, source, stage, tags, consent_followup, notes | has interviews |
 | interviews | id, venture_id, contact_id, date, format, interviewers, notes (JSON), quotes, pain_score, wtp_signal, next_step, follow_up_date | links to hypotheses and insights |

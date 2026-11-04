@@ -1,3 +1,4 @@
+import { today } from '../../../shared/dates'
 import type { HypothesisStatus, Tally } from '../../../shared/evidence'
 import type { ContactInput, ContactStage, DecisionKind, HypothesisType, InterviewInput } from '../../../shared/schema'
 import type { CONTACT_SOURCES, INTERVIEW_FORMATS, RISKS, VERDICTS } from '../../../shared/schema'
@@ -31,12 +32,7 @@ export const NOTE_FIELDS = [
   { key: 'budget', label: 'Budget and willingness to pay', hint: 'Do they spend money or time on it now?' }
 ] as const
 
-const pad = (n: number) => String(n).padStart(2, '0')
-/** Today's date in the user's time zone, as YYYY-MM-DD. */
-export function today(): string {
-  const d = new Date()
-  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`
-}
+
 
 /** Formats a YYYY-MM-DD date for display (parsed as a local date, so it never shifts a day). */
 export function formatDate(iso: string): string {
@@ -123,3 +119,5 @@ export const DECISION_HELP: Record<DecisionKind, string> = {
   pause: 'Step back for now.',
   stop: 'The evidence says no. End this venture.'
 }
+
+export { today }

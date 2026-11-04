@@ -4,6 +4,13 @@ import type {
   ContactInput,
   ContactStage,
   Dashboard,
+  Guide,
+  GuideInput,
+  Home,
+  Insight,
+  InsightInput,
+  Task,
+  TaskInput,
   Decision,
   DecisionInput,
   EvidenceLink,
@@ -65,6 +72,16 @@ export interface InvokeApi {
   listDecisions(): Promise<Decision[]>
   recordDecision(input: DecisionInput): Promise<Decision>
   deleteDecision(id: string): Promise<void>
+  getHome(): Promise<Home>
+  setWeeklyGoal(goal: number): Promise<void>
+  saveTask(input: TaskInput): Promise<Task>
+  deleteTask(id: string): Promise<void>
+  listInsights(): Promise<Insight[]>
+  saveInsight(input: InsightInput): Promise<Insight>
+  deleteInsight(id: string): Promise<void>
+  listGuides(): Promise<Guide[]>
+  saveGuide(input: GuideInput): Promise<Guide>
+  deleteGuide(id: string): Promise<void>
   backupNow(): Promise<{ at: string }>
   exportWorkspace(): Promise<{ path: string } | Canceled>
   pickImport(): Promise<ImportPreview | Canceled>
@@ -98,6 +115,16 @@ export const INVOKE_CHANNELS = [
   'listDecisions',
   'recordDecision',
   'deleteDecision',
+  'getHome',
+  'setWeeklyGoal',
+  'saveTask',
+  'deleteTask',
+  'listInsights',
+  'saveInsight',
+  'deleteInsight',
+  'listGuides',
+  'saveGuide',
+  'deleteGuide',
   'backupNow',
   'exportWorkspace',
   'pickImport',

@@ -9,14 +9,18 @@ import {
   contactInput,
   contactStageInput,
   decisionInput,
+  guideInput,
   hypothesisInput,
   idInput,
   importToken,
+  insightInput,
   interviewInput,
   profileInput,
+  taskInput,
   ventureBundleInput,
   ventureCreateInput,
   versionInput,
+  weeklyGoalInput,
   type WorkspaceFile
 } from '../shared/schema'
 import { backupNow } from './backup'
@@ -86,6 +90,16 @@ export function createActions(ctx: Ctx): Actions {
     listDecisions: () => repo.listDecisions(db),
     recordDecision: (arg) => repo.recordDecision(db, parse(decisionInput, arg)),
     deleteDecision: (arg) => repo.deleteDecision(db, parse(idInput, arg)),
+    getHome: () => repo.getHome(db),
+    setWeeklyGoal: (arg) => repo.setWeeklyGoal(db, parse(weeklyGoalInput, arg)),
+    saveTask: (arg) => repo.saveTask(db, parse(taskInput, arg)),
+    deleteTask: (arg) => repo.deleteTask(db, parse(idInput, arg)),
+    listInsights: () => repo.listInsights(db),
+    saveInsight: (arg) => repo.saveInsight(db, parse(insightInput, arg)),
+    deleteInsight: (arg) => repo.deleteInsight(db, parse(idInput, arg)),
+    listGuides: () => repo.listGuides(db),
+    saveGuide: (arg) => repo.saveGuide(db, parse(guideInput, arg)),
+    deleteGuide: (arg) => repo.deleteGuide(db, parse(idInput, arg)),
     backupNow: () => {
       const at = new Date()
       backupNow(db, ctx.backupsDir, at, 'manual')

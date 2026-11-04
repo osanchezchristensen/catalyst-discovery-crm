@@ -1,13 +1,23 @@
 import { describe, expect, it } from 'vitest'
 import { randomUUID } from 'node:crypto'
 import {
+  deleteGuide,
+  deleteInsight,
+  deleteTask,
+  getHome,
+  listGuides,
+  listInsights,
+  listTasks,
+  saveGuide,
+  saveInsight,
+  saveTask,
+  setWeeklyGoal,
   decodeSnapshots,
   deleteDecision,
   getDashboard,
   listDecisions,
   listHypothesisVersions,
   recordDecision,
-  weekStart,
   addStarterHypotheses,
   deleteHypothesis,
   listEvidence,
@@ -28,7 +38,8 @@ import {
   setContactStage
 } from './repo'
 import { testDb } from '../test-helpers'
-import { contactInput, decisionInput, hypothesisInput, interviewInput, ventureBundleInput } from '../../shared/schema'
+import { addDays, today, weekStart } from '../../shared/dates'
+import { contactInput, decisionInput, guideInput, hypothesisInput, insightInput, interviewInput, taskInput, ventureBundleInput, weeklyGoalInput } from '../../shared/schema'
 
 const base = { name: 'Campus Eats', pitch: '', problem: '', stage: 1, semester: 'Fall 2026' }
 
@@ -361,5 +372,78 @@ describe('dashboard', () => {
     const db = testDb()
     createVenture(db, base, 'Sam')
     expect(getDashboard(db)).toMatchObject({ perWeek: [], bySegment: [], hasBeachhead: false })
+  })
+})
+
+describe('follow-ups and the weekly goal', () => {
+  it('lists open tasks first by due date and scopes them to the venture', () => {
+    const db = testDb()
+    createVenture(db, base, 'Sam')
+    const i = saveInterview(db, interview())
+    const later = saveTask(db, taskInput.parse({ title: 'Send survey', due_date: '2026-11-20', interview_id: null, done: false }))
+    saveTask(db, taskInput.parse({ title: 'Call back', due_date: '2026-11-05', interview_id: i.id, done: false }))
+    saveTask(db, taskInput.parse({ title: 'Someday', due_date: null, interview_id: null, done: false }))
+    saveTask(db, taskInput.parse({ id: later.id, title: 'Send survey', due_date: '2026-11-20', interview_id: null, done: true }))
+    expect(listTasks(db).map((t) => [t.title, t.done])).toEqual([
+      ['Call back', false],
+      ['Someday', false],
+      ['Send survey', true]
+    ])
+    expect(getHome(db).tasks.map((t) => t.title)).toEqual(['Call back', 'Someday'])
+    expect(() => saveTask(db, taskInput.parse({ title: 'x', due_date: null, interview_id: randomUUID(), done: false }))).toThrow(
+      /interview no longer exists/
+    )
+    deleteTask(db, later.id)
+    expect(listTasks(db)).toHaveLength(2)
+  })
+
+  it('counts this week against the goal and the streak', () => {
+    const db = testDb()
+    createVenture(db, base, 'Sam')
+    expect(getHome(db)).toMatchObject({ goal: 3, thisWeek: 0, streak: 0 })
+    const thisWeek = weekStart(today())
+    saveInterview(db, interview({ date: today() }))
+    for (const d of [addDays(thisWeek, -7), addDays(thisWeek, -6)]) saveInterview(db, interview({ date: d }))
+    setWeeklyGoal(db, 2)
+    expect(getHome(db)).toMatchObject({ goal: 2, thisWeek: 1, streak: 1 })
+    setWeeklyGoal(db, 1)
+    expect(getHome(db).streak).toBe(2)
+    expect(() => weeklyGoalInput.parse(0)).toThrow()
+  })
+})
+
+describe('insights and tags', () => {
+  it('saves insights with tags and counts tags with average pain', () => {
+    const db = testDb()
+    createVenture(db, base, 'Sam')
+    const c = saveContact(db, contact())
+    const hot = saveInterview(db, interview({ contact_id: c.id, pain_score: 5 }))
+    const mild = saveInterview(db, interview({ pain_score: 2 }))
+    const a = saveInsight(db, insightInput.parse({ interview_id: hot.id, text: 'Food is cold', tags: ['delivery', 'cold'], is_quote: true }))
+    saveInsight(db, insightInput.parse({ interview_id: mild.id, text: 'Slow app', tags: ['delivery', 'delivery'], is_quote: false }))
+    saveInsight(db, insightInput.parse({ interview_id: null, text: 'Untagged idea', tags: [], is_quote: false }))
+    expect(listInsights(db).find((n) => n.id === a.id)).toMatchObject({ contact_name: 'Pat', is_quote: true, tags: ['delivery', 'cold'] })
+    expect(getDashboard(db).topTags).toEqual([
+      { tag: 'delivery', count: 2, avgPain: 3.5 },
+      { tag: 'cold', count: 1, avgPain: 5 }
+    ])
+    deleteInterview(db, hot.id)
+    expect(listInsights(db).find((n) => n.id === a.id)?.interview_id).toBeNull()
+    deleteInsight(db, a.id)
+    expect(listInsights(db)).toHaveLength(2)
+  })
+})
+
+describe('guides', () => {
+  it('creates, edits and deletes guides with ordered questions', () => {
+    const db = testDb()
+    createVenture(db, base, 'Sam')
+    const g = saveGuide(db, guideInput.parse({ name: 'First calls', questions: ['Tell me about your week.', 'Why was that hard?'] }))
+    expect(saveGuide(db, guideInput.parse({ id: g.id, name: 'First calls', questions: ['Why was that hard?'] })).questions).toEqual([
+      'Why was that hard?'
+    ])
+    expect(() => guideInput.parse({ name: 'x', questions: ['   '] })).toThrow()
+    deleteGuide(db, g.id)
+    expect(listGuides(db)).toEqual([])
   })
 })

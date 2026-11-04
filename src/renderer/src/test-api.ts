@@ -1,13 +1,13 @@
 // An in-memory stand-in for window.api, for screen tests only.
 import { vi } from 'vitest'
-import type { Hypothesis, Interview, InterviewInput, VentureBundle } from '../../shared/schema'
+import type { Hypothesis, Insight, InsightInput, Interview, InterviewInput, VentureBundle } from '../../shared/schema'
 
 const T = '2026-11-03T12:00:00.000Z'
 
 export const ventureBundle: VentureBundle = {
   venture: {
     id: 'v1', cohort_id: null, name: 'Campus Eats', pitch: '', problem: '', stage: 1, semester: '',
-    status: 'active', created_by: 'Sam', created_at: T, updated_at: T
+    status: 'active', created_by: 'Sam', weekly_goal: 3, created_at: T, updated_at: T
   },
   members: [{ id: 'm1', name: 'Sam', role: 'owner' }],
   segments: []
@@ -34,10 +34,17 @@ export function installFakeApi(opts: { hypotheses?: Hypothesis[] } = {}) {
     listContacts: vi.fn(async () => []),
     listInterviews: vi.fn(async () => saved),
     listHypotheses: vi.fn(async () => opts.hypotheses ?? []),
+    getHome: vi.fn(async () => ({ goal: 3, thisWeek: 0, streak: 0, tasks: [] })),
+    listGuides: vi.fn(async () => []),
+    listInsights: vi.fn(async () => []),
+    saveInsight: vi.fn(async (input: InsightInput): Promise<Insight> => ({
+      id: 'n1', interview_id: input.interview_id ?? null, text: input.text, tags: input.tags, is_quote: input.is_quote,
+      date: null, contact_name: null, created_at: T
+    })),
     getInterview: vi.fn(async (id: string) => saved.find((i) => i.id === id) ?? null),
     saveInterview: vi.fn(async (input: InterviewInput): Promise<Interview> => {
       const row: Interview = {
-        id: input.id ?? `i${saved.length + 1}`, venture_id: 'v1', contact_id: input.contact_id, date: input.date,
+        id: input.id ?? `00000000-0000-4000-8000-${String(saved.length + 1).padStart(12, '0')}`, venture_id: 'v1', contact_id: input.contact_id, date: input.date,
         format: input.format, interviewers: input.interviewers, notes: input.notes, quotes: input.quotes ?? '',
         pain_score: input.pain_score ?? null, wtp_signal: input.wtp_signal ?? '', next_step: input.next_step ?? '',
         follow_up_date: input.follow_up_date ?? null, created_at: T, updated_at: T, contact_name: null,

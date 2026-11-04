@@ -26,6 +26,7 @@ export function BarChartCard({
   categoryLabel,
   series,
   horizontal = false,
+  tableExtras = [],
   empty
 }: {
   title: string
@@ -35,6 +36,8 @@ export function BarChartCard({
   categoryLabel: string
   series: Series[]
   horizontal?: boolean
+  /** Extra columns for the table view only (a second measure must not share the bar axis). */
+  tableExtras?: { key: string; label: string }[]
   empty: string
 }) {
   const height = horizontal ? Math.max(160, rows.length * 36 + 40) : 220
@@ -100,7 +103,7 @@ export function BarChartCard({
               <thead>
                 <tr>
                   <th scope="col">{categoryLabel}</th>
-                  {series.map((s) => (
+                  {[...series, ...tableExtras].map((s) => (
                     <th key={s.key} scope="col">
                       {s.label}
                     </th>
@@ -111,7 +114,7 @@ export function BarChartCard({
                 {rows.map((r) => (
                   <tr key={String(r[category])}>
                     <th scope="row">{r[category]}</th>
-                    {series.map((s) => (
+                    {[...series, ...tableExtras].map((s) => (
                       <td key={s.key}>{r[s.key]}</td>
                     ))}
                   </tr>

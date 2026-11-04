@@ -1,7 +1,7 @@
 import { randomUUID } from 'node:crypto'
 import { describe, expect, it } from 'vitest'
-import { createVenture, getActiveVenture, listContacts, listInterviews, saveHypothesis, saveInterview, saveProfile, saveVenture, listHypotheses, listDecisions, recordDecision } from './db/repo'
-import { decisionInput, hypothesisInput, interviewInput } from '../shared/schema'
+import { createVenture, getActiveVenture, listContacts, listInterviews, saveHypothesis, saveInterview, saveProfile, saveVenture, listHypotheses, listDecisions, recordDecision, saveTask, saveInsight, saveGuide, listTasks, listInsights, listGuides } from './db/repo'
+import { decisionInput, guideInput, hypothesisInput, insightInput, interviewInput, taskInput } from '../shared/schema'
 import { migrations } from './db/migrations'
 import { testDb } from './test-helpers'
 import { ImportError, applyImport, exportWorkspace, parseWorkspace, previewImport } from './workspace'
@@ -77,12 +77,19 @@ describe('import merge', () => {
       notes: { behavior: 'a', pains: 'b', solutions: 'c', budget: 'd' },
       evidence: [{ hypothesis_id: h.id, verdict: 'supports', note: 'Said it twice' }]
     }))
+    const i = listInterviews(db)[0]
+    saveTask(db, taskInput.parse({ title: 'Call back', due_date: '2026-11-10', interview_id: i.id, done: false }))
+    saveInsight(db, insightInput.parse({ interview_id: i.id, text: 'Too slow', tags: ['speed'], is_quote: true }))
+    saveGuide(db, guideInput.parse({ name: 'First calls', questions: ['Why was that hard?'] }))
     recordDecision(db, decisionInput.parse({ decision: 'persevere', rationale: 'Clear pain', decided_at: '2026-11-03', hypothesis_ids: [h.id] }))
     const target = testDb()
     applyImport(target, roundTrip(exportWorkspace(db, { ...opts, includeContactDetails: true })))
     expect(listInterviews(target)).toEqual(listInterviews(db))
     expect(listHypotheses(target)).toEqual(listHypotheses(db))
     expect(listDecisions(target)).toEqual(listDecisions(db))
+    expect(listTasks(target)).toEqual(listTasks(db))
+    expect(listInsights(target)).toEqual(listInsights(db))
+    expect(listGuides(target)).toEqual(listGuides(db))
     expect(listContacts(target)).toEqual(listContacts(db))
   })
 
@@ -134,6 +141,17 @@ describe('import merge', () => {
     expect(() => previewImport(target, file)).toThrow('different venture (Campus Eats)')
     expect(() => applyImport(target, file)).toThrow(ImportError)
     expect(target.prepare('SELECT COUNT(*) FROM ventures').pluck().get()).toBe(1)
+  })
+
+  it('imports a file exported before v4 (no weekly goal, no guides)', () => {
+    const { db } = seeded()
+    const file = JSON.parse(JSON.stringify(exportWorkspace(db, opts)))
+    for (const v of file.tables.ventures) delete v.weekly_goal
+    delete file.tables.guides
+    file.schema_version = 3
+    const target = testDb()
+    applyImport(target, roundTrip(file))
+    expect(getActiveVenture(target)?.venture.weekly_goal).toBe(3)
   })
 
   it('rolls back everything when a row points at a missing parent', () => {

@@ -39,4 +39,21 @@ describe('interview editor inside the app', () => {
     await act(() => vi.advanceTimersByTimeAsync(5000))
     expect(api.saveInterview.mock.calls[0][0].evidence).toEqual([{ hypothesis_id: hypothesis.id, verdict: 'refutes', note: '' }])
   })
+
+  it('saves highlighted note text as a tagged insight for this interview', async () => {
+    const api = installFakeApi()
+    const pains = (await openNewInterview()) as HTMLTextAreaElement
+    fireEvent.change(pains, { target: { value: 'Food is always cold by midnight' } })
+    await act(() => vi.advanceTimersByTimeAsync(5000)) // autosave creates the interview
+    pains.setSelectionRange(0, 19)
+    fireEvent.select(pains)
+    fireEvent.click(await screen.findByRole('button', { name: 'Save highlighted text as insight' }))
+    expect(await screen.findByLabelText('Insight')).toHaveProperty('value', 'Food is always cold')
+    fireEvent.change(screen.getByLabelText('Tags'), { target: { value: 'Cold, delivery, cold' } })
+    fireEvent.click(screen.getByRole('button', { name: 'Save insight' }))
+    await act(() => vi.advanceTimersByTimeAsync(50))
+    expect(api.saveInsight).toHaveBeenCalledWith(
+      expect.objectContaining({ text: 'Food is always cold', tags: ['cold', 'delivery'], interview_id: '00000000-0000-4000-8000-000000000001', is_quote: false })
+    )
+  })
 })
