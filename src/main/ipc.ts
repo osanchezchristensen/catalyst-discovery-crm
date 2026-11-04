@@ -8,6 +8,7 @@ import type { AppEvent, InvokeApi } from '../shared/api'
 import {
   contactInput,
   contactStageInput,
+  decisionInput,
   hypothesisInput,
   idInput,
   importToken,
@@ -15,6 +16,7 @@ import {
   profileInput,
   ventureBundleInput,
   ventureCreateInput,
+  versionInput,
   type WorkspaceFile
 } from '../shared/schema'
 import { backupNow } from './backup'
@@ -74,11 +76,16 @@ export function createActions(ctx: Ctx): Actions {
     getInterview: (arg) => repo.getInterview(db, parse(idInput, arg)),
     saveInterview: (arg) => repo.saveInterview(db, parse(interviewInput, arg)),
     deleteInterview: (arg) => repo.deleteInterview(db, parse(idInput, arg)),
-    listHypotheses: () => repo.listHypotheses(db),
+    listHypotheses: (arg) => repo.listHypotheses(db, parse(versionInput, arg)),
+    listHypothesisVersions: () => repo.listHypothesisVersions(db),
     saveHypothesis: (arg) => repo.saveHypothesis(db, parse(hypothesisInput, arg)),
     deleteHypothesis: (arg) => repo.deleteHypothesis(db, parse(idInput, arg)),
     addStarterHypotheses: () => repo.addStarterHypotheses(db),
     listEvidence: (arg) => repo.listEvidence(db, parse(idInput, arg)),
+    getDashboard: () => repo.getDashboard(db),
+    listDecisions: () => repo.listDecisions(db),
+    recordDecision: (arg) => repo.recordDecision(db, parse(decisionInput, arg)),
+    deleteDecision: (arg) => repo.deleteDecision(db, parse(idInput, arg)),
     backupNow: () => {
       const at = new Date()
       backupNow(db, ctx.backupsDir, at, 'manual')

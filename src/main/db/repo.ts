@@ -2,14 +2,21 @@ import { randomUUID } from 'node:crypto'
 import type Database from 'better-sqlite3'
 import type { z } from 'zod'
 import { suggestStatus, type Tally } from '../../shared/evidence'
+import { readiness } from '../../shared/readiness'
+import { hypothesisSnapshot } from '../../shared/schema'
 import type {
   Contact,
   ContactStage,
   contactInput,
+  Dashboard,
+  Decision,
+  decisionInput,
+  DecisionKind,
   EvidenceItem,
   EvidenceLink,
   Hypothesis,
   hypothesisInput,
+  HypothesisSnapshot,
   Interview,
   interviewInput,
   Member,
@@ -357,8 +364,8 @@ type HypothesisSave = z.output<typeof hypothesisInput>
 const currentVersion = (db: DB, ventureId: string) =>
   (db.prepare('SELECT MAX(version) FROM hypotheses WHERE venture_id = ?').pluck().get(ventureId) as number | null) ?? 1
 
-/** The current version's hypotheses, each with its evidence tally and suggested status. */
-export function listHypotheses(db: DB): Hypothesis[] {
+/** One version's hypotheses (default: the current one), each with its evidence tally and suggested status. */
+export function listHypotheses(db: DB, version?: number): Hypothesis[] {
   const v = activeVentureId(db)
   if (!v) return []
   const rows = db
@@ -371,7 +378,7 @@ export function listHypotheses(db: DB): Hypothesis[] {
        WHERE h.venture_id = ? AND h.version = ?
        GROUP BY h.id ORDER BY h.created_at, h.rowid`
     )
-    .all(v, currentVersion(db, v)) as (Omit<Hypothesis, 'tally' | 'suggested'> & Tally)[]
+    .all(v, version ?? currentVersion(db, v)) as (Omit<Hypothesis, 'tally' | 'suggested'> & Tally)[]
   return rows.map(({ supports, refutes, neutral, ...h }) => {
     const tally = { supports, refutes, neutral }
     return { ...h, tally, suggested: suggestStatus(tally) }
@@ -397,7 +404,15 @@ export function saveHypothesis(db: DB, input: HypothesisSave): Hypothesis {
        VALUES (@id, @v, @version, @type, @statement, @risk, @status, @success_criteria, @t, @t)`
     ).run({ ...input, id, v, t, version: currentVersion(db, v) })
   }
-  return listHypotheses(db).find((h) => h.id === id)!
+  const version = db.prepare('SELECT version FROM hypotheses WHERE id = ?').pluck().get(id) as number
+  return listHypotheses(db, version).find((h) => h.id === id)!
+}
+
+/** Hypothesis versions that exist (a pivot starts a new one), oldest first. */
+export function listHypothesisVersions(db: DB): number[] {
+  const v = activeVentureId(db)
+  if (!v) return []
+  return db.prepare('SELECT DISTINCT version FROM hypotheses WHERE venture_id = ? ORDER BY version').pluck().all(v) as number[]
 }
 
 /** Deletes a hypothesis; its evidence links go with it (FK ON DELETE CASCADE). */
@@ -446,4 +461,150 @@ export function listEvidence(db: DB, hypothesisId: string): EvidenceLink[] {
        WHERE e.hypothesis_id = ? AND i.venture_id = ? ORDER BY i.date DESC, i.created_at DESC`
     )
     .all(hypothesisId, requireVenture(db)) as EvidenceLink[]
+}
+
+// ---- Decisions (F8) and the viability dashboard (F7) ----
+type DecisionSave = z.output<typeof decisionInput>
+
+const VENTURE_STATUS: Record<DecisionKind, 'active' | 'paused' | 'stopped'> = {
+  persevere: 'active',
+  pivot: 'active',
+  pause: 'paused',
+  stop: 'stopped'
+}
+
+/** Imported files may hold anything in evidence_ids; keep only snapshots that pass the schema. */
+export function decodeSnapshots(text: string): HypothesisSnapshot[] {
+  const raw = parseJson(text)
+  if (!Array.isArray(raw)) return []
+  return raw.flatMap((s) => {
+    const r = hypothesisSnapshot.safeParse(s)
+    return r.success ? [r.data] : []
+  })
+}
+
+export function listDecisions(db: DB): Decision[] {
+  const v = activeVentureId(db)
+  if (!v) return []
+  const rows = db
+    .prepare('SELECT * FROM decisions WHERE venture_id = ? ORDER BY decided_at DESC, created_at DESC')
+    .all(v) as (Omit<Decision, 'hypotheses'> & { evidence_ids: string })[]
+  return rows.map(({ evidence_ids, id, decision, rationale, decided_at, created_at }) => ({
+    id,
+    decision,
+    rationale,
+    decided_at,
+    created_at,
+    hypotheses: decodeSnapshots(evidence_ids)
+  }))
+}
+
+/**
+ * Records a decision with snapshots of the hypotheses it cites, sets the venture status, and on a
+ * pivot copies the current hypotheses into a new version (Untested; evidence stays with the old one).
+ */
+export function recordDecision(db: DB, input: DecisionSave): Decision {
+  const v = requireVenture(db)
+  const current = new Map(listHypotheses(db).map((h) => [h.id, h]))
+  const snapshots: HypothesisSnapshot[] = input.hypothesis_ids.map((hid) => {
+    const h = current.get(hid)
+    if (!h) throw new Error('That hypothesis no longer exists. Reload and try again.')
+    return { hypothesis_id: h.id, statement: h.statement, status: h.status, tally: h.tally, version: h.version }
+  })
+  const t = now()
+  const id = randomUUID()
+  db.transaction(() => {
+    db.prepare(
+      `INSERT INTO decisions (id, venture_id, decision, rationale, decided_at, evidence_ids, created_at, updated_at)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?)`
+    ).run(id, v, input.decision, input.rationale, `${input.decided_at}T12:00:00.000Z`, JSON.stringify(snapshots), t, t)
+    db.prepare('UPDATE ventures SET status = ?, updated_at = ? WHERE id = ?').run(VENTURE_STATUS[input.decision], t, v)
+    if (input.decision === 'pivot' && current.size) {
+      const next = currentVersion(db, v) + 1
+      const copy = db.prepare(
+        `INSERT INTO hypotheses (id, venture_id, version, type, statement, risk, status, success_criteria, created_at, updated_at)
+         VALUES (?, ?, ?, ?, ?, ?, 'untested', ?, ?, ?)`
+      )
+      for (const h of current.values()) copy.run(randomUUID(), v, next, h.type, h.statement, h.risk, h.success_criteria, t, t)
+    }
+  })()
+  return listDecisions(db).find((d) => d.id === id)!
+}
+
+/** Removes a decision recorded by mistake. A pivot's hypothesis copies stay. */
+export function deleteDecision(db: DB, id: string): void {
+  db.prepare('DELETE FROM decisions WHERE id = ? AND venture_id = ?').run(id, requireVenture(db))
+}
+
+const DAY_MS = 24 * 60 * 60 * 1000
+const MAX_WEEKS = 26
+const addDays = (date: string, days: number) => new Date(Date.parse(`${date}T00:00:00Z`) + days * DAY_MS).toISOString().slice(0, 10)
+/** Today's date in this computer's time zone, as YYYY-MM-DD. */
+const localToday = () => {
+  const d = new Date()
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`
+}
+/** Monday of the week containing a YYYY-MM-DD date, computed in UTC so no time zone can shift it. */
+export function weekStart(date: string): string {
+  const d = new Date(`${date}T00:00:00Z`)
+  return new Date(d.getTime() - ((d.getUTCDay() + 6) % 7) * DAY_MS).toISOString().slice(0, 10)
+}
+
+export function getDashboard(db: DB): Dashboard {
+  const v = activeVentureId(db)
+  const segments = v
+    ? (db.prepare('SELECT id, name, is_beachhead FROM segments WHERE venture_id = ?').all(v) as {
+        id: string
+        name: string
+        is_beachhead: number
+      }[]).map((s) => ({ ...s, is_beachhead: s.is_beachhead === 1 }))
+    : []
+  const interviews = v
+    ? (db
+        .prepare(
+          `SELECT i.date, i.pain_score, i.wtp_signal, c.segment_id FROM interviews i
+           LEFT JOIN contacts c ON c.id = i.contact_id WHERE i.venture_id = ?`
+        )
+        .all(v) as { date: string; pain_score: number | null; wtp_signal: string; segment_id: string | null }[])
+    : []
+  const beachhead = segments.find((s) => s.is_beachhead)
+
+  // Every week up to the latest interview, empty ones included so gaps show. Capped at
+  // MAX_WEEKS and never past this week, so a mistyped year (2062) can't create thousands of bars.
+  const thisWeek = weekStart(localToday())
+  const counts = new Map<string, number>()
+  for (const i of interviews) counts.set(weekStart(i.date), (counts.get(weekStart(i.date)) ?? 0) + 1)
+  const weeks = [...counts.keys()].filter((w) => w <= thisWeek).sort()
+  const last = weeks[weeks.length - 1]
+  const earliest = last && addDays(last, -7 * (MAX_WEEKS - 1))
+  const perWeek: Dashboard['perWeek'] = []
+  for (let w = last && (weeks[0] > earliest ? weeks[0] : earliest); w && w <= last; w = addDays(w, 7)) {
+    perWeek.push({ week: w, count: counts.get(w) ?? 0 })
+  }
+
+  const segmentName = new Map(segments.map((s) => [s.id, s.name]))
+  const bySegmentMap = new Map<string, number>()
+  for (const i of interviews) {
+    const name = (i.segment_id && segmentName.get(i.segment_id)) || 'No segment'
+    bySegmentMap.set(name, (bySegmentMap.get(name) ?? 0) + 1)
+  }
+  const bySegment = [...bySegmentMap].map(([segment, count]) => ({ segment, count })).sort((a, b) => b.count - a.count)
+
+  const pain = [1, 2, 3, 4, 5].map((score) => ({
+    score,
+    all: interviews.filter((i) => i.pain_score === score).length,
+    beachhead: interviews.filter((i) => i.pain_score === score && !!beachhead && i.segment_id === beachhead.id).length
+  }))
+
+  const hypotheses = listHypotheses(db)
+  const decisions = listDecisions(db)
+  return {
+    perWeek,
+    bySegment,
+    pain,
+    hasBeachhead: !!beachhead,
+    hypotheses,
+    decisions,
+    readiness: readiness({ segments, interviews, hypotheses, decisions })
+  }
 }

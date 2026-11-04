@@ -1,6 +1,7 @@
 import { Plus, Sparkles } from 'lucide-react'
 import { useCallback, useEffect, useState } from 'react'
 import { HYPOTHESIS_TYPES, type Hypothesis, type HypothesisType } from '../../../shared/schema'
+import { SelectField } from '@/components/Field'
 import { HypothesisDialog } from '@/components/HypothesisDialog'
 import { StatusChip } from '@/components/StatusChip'
 import { Button } from '@/components/ui/button'
@@ -20,10 +21,17 @@ export function Hypotheses({
 }) {
   const [items, setItems] = useState<Hypothesis[] | null>(null)
   const [open, setOpen] = useState<Open | null>(null)
-  const reload = useCallback(() => window.api.listHypotheses().then(setItems, onError), [onError])
+  const [versions, setVersions] = useState<number[]>([])
+  const [viewing, setViewing] = useState<number | null>(null) // null = the current version
+  const reload = useCallback(() => {
+    window.api.listHypothesisVersions().then(setVersions, onError)
+    return window.api.listHypotheses(viewing ?? undefined).then(setItems, onError)
+  }, [onError, viewing])
   useEffect(() => void reload(), [reload])
 
   if (!items) return null
+  const current = versions[versions.length - 1] ?? 1
+  const readOnly = viewing !== null && viewing !== current
 
   const starters = async () => {
     try {
@@ -43,7 +51,27 @@ export function Hypotheses({
 
   return (
     <div className="flex flex-col gap-6">
-      {items.length === 0 && (
+      {versions.length > 1 && (
+        <div className="flex items-end justify-between gap-4">
+          <p className="font-semibold">
+            {readOnly ? `Version ${viewing} (earlier, read-only)` : `Version ${current} (current)`}
+          </p>
+          <div className="w-48">
+            <SelectField
+              label="View version"
+              value={viewing ?? current}
+              onChange={(e) => setViewing(Number(e.target.value) === current ? null : Number(e.target.value))}
+            >
+              {[...versions].reverse().map((v) => (
+                <option key={v} value={v}>
+                  {v === current ? `Version ${v} (current)` : `Version ${v}`}
+                </option>
+              ))}
+            </SelectField>
+          </div>
+        </div>
+      )}
+      {items.length === 0 && !readOnly && (
         <Card>
           <p>No hypotheses yet. Write down what must be true for your venture to work, then test it in interviews.</p>
           <div className="mt-4 flex gap-2">
@@ -65,19 +93,23 @@ export function Hypotheses({
                 <h2 id={`type-${type}`} className="text-xl font-semibold">
                   {TYPE_LABELS[type]} <span className="tabular text-[15px] font-normal text-muted-foreground">({group.length})</span>
                 </h2>
-                {addButton(type, `Add ${TYPE_LABELS[type].toLowerCase()} hypothesis`)}
+                {!readOnly && addButton(type, `Add ${TYPE_LABELS[type].toLowerCase()} hypothesis`)}
               </div>
               {group.length > 0 && (
                 <ul className="mt-3 grid grid-cols-2 gap-3">
                   {group.map((h) => (
                     <li key={h.id} className="flex flex-col gap-2 rounded-lg border border-border bg-card p-4 shadow-sm">
-                      <button
-                        type="button"
-                        onClick={() => setOpen({ hypothesis: h, type })}
-                        className="text-left font-semibold break-words text-primary underline-offset-2 hover:underline"
-                      >
-                        {h.statement}
-                      </button>
+                      {readOnly ? (
+                        <p className="font-semibold break-words">{h.statement}</p>
+                      ) : (
+                        <button
+                          type="button"
+                          onClick={() => setOpen({ hypothesis: h, type })}
+                          className="text-left font-semibold break-words text-primary underline-offset-2 hover:underline"
+                        >
+                          {h.statement}
+                        </button>
+                      )}
                       <div className="flex flex-wrap items-center gap-2 text-[13px]">
                         <StatusChip status={h.status} />
                         <span>{RISK_LABELS[h.risk]}</span>

@@ -1,5 +1,5 @@
 import type { HypothesisStatus, Tally } from '../../../shared/evidence'
-import type { ContactInput, ContactStage, HypothesisType, InterviewInput } from '../../../shared/schema'
+import type { ContactInput, ContactStage, DecisionKind, HypothesisType, InterviewInput } from '../../../shared/schema'
 import type { CONTACT_SOURCES, INTERVIEW_FORMATS, RISKS, VERDICTS } from '../../../shared/schema'
 
 export const STAGE_LABELS: Record<ContactStage, string> = {
@@ -109,3 +109,17 @@ export const VERDICT_LABELS: Record<(typeof VERDICTS)[number], string> = {
 
 export const tallyText = ({ supports, refutes, neutral }: Tally) =>
   `${supports} support · ${refutes} refute · ${neutral} neutral`
+
+export const DECISION_LABELS: Record<DecisionKind, string> = {
+  persevere: 'Persevere',
+  pivot: 'Pivot',
+  pause: 'Pause',
+  stop: 'Stop'
+}
+
+export const DECISION_HELP: Record<DecisionKind, string> = {
+  persevere: 'The evidence holds. Keep going.',
+  pivot: 'Change a key assumption and test again.',
+  pause: 'Step back for now.',
+  stop: 'The evidence says no. End this venture.'
+}

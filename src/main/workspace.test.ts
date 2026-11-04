@@ -1,7 +1,7 @@
 import { randomUUID } from 'node:crypto'
 import { describe, expect, it } from 'vitest'
-import { createVenture, getActiveVenture, listContacts, listInterviews, saveHypothesis, saveInterview, saveProfile, saveVenture, listHypotheses } from './db/repo'
-import { hypothesisInput, interviewInput } from '../shared/schema'
+import { createVenture, getActiveVenture, listContacts, listInterviews, saveHypothesis, saveInterview, saveProfile, saveVenture, listHypotheses, listDecisions, recordDecision } from './db/repo'
+import { decisionInput, hypothesisInput, interviewInput } from '../shared/schema'
 import { migrations } from './db/migrations'
 import { testDb } from './test-helpers'
 import { ImportError, applyImport, exportWorkspace, parseWorkspace, previewImport } from './workspace'
@@ -77,10 +77,12 @@ describe('import merge', () => {
       notes: { behavior: 'a', pains: 'b', solutions: 'c', budget: 'd' },
       evidence: [{ hypothesis_id: h.id, verdict: 'supports', note: 'Said it twice' }]
     }))
+    recordDecision(db, decisionInput.parse({ decision: 'persevere', rationale: 'Clear pain', decided_at: '2026-11-03', hypothesis_ids: [h.id] }))
     const target = testDb()
     applyImport(target, roundTrip(exportWorkspace(db, { ...opts, includeContactDetails: true })))
     expect(listInterviews(target)).toEqual(listInterviews(db))
     expect(listHypotheses(target)).toEqual(listHypotheses(db))
+    expect(listDecisions(target)).toEqual(listDecisions(db))
     expect(listContacts(target)).toEqual(listContacts(db))
   })
 
