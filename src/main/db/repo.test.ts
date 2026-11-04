@@ -1,6 +1,8 @@
 import { describe, expect, it } from 'vitest'
 import { randomUUID } from 'node:crypto'
 import {
+  getThresholds,
+  saveThresholds,
   deleteGuide,
   deleteInsight,
   deleteTask,
@@ -39,6 +41,7 @@ import {
 } from './repo'
 import { testDb } from '../test-helpers'
 import { addDays, today, weekStart } from '../../shared/dates'
+import { DEFAULT_THRESHOLDS } from '../../shared/readiness'
 import { contactInput, decisionInput, guideInput, hypothesisInput, insightInput, interviewInput, taskInput, ventureBundleInput, weeklyGoalInput } from '../../shared/schema'
 
 const base = { name: 'Campus Eats', pitch: '', problem: '', stage: 1, semester: 'Fall 2026' }
@@ -445,5 +448,37 @@ describe('guides', () => {
     expect(() => guideInput.parse({ name: 'x', questions: ['   '] })).toThrow()
     deleteGuide(db, g.id)
     expect(listGuides(db)).toEqual([])
+  })
+})
+
+describe('readiness thresholds', () => {
+  it('defaults, saves into a new cohort without dropping other settings, and drives the checklist', () => {
+    const db = testDb()
+    const v = createVenture(db, base, 'Sam')
+    expect(getThresholds(db)).toEqual(DEFAULT_THRESHOLDS)
+    saveThresholds(db, { ...DEFAULT_THRESHOLDS, beachheadInterviews: 2 })
+    const cohortId = getActiveVenture(db)?.venture.cohort_id
+    expect(cohortId).toBeTruthy()
+    expect(db.prepare('SELECT name FROM cohorts WHERE id = ?').pluck().get(cohortId)).toBe('Fall 2026')
+    db.prepare(`UPDATE cohorts SET settings = json_set(settings, '$.other', 1) WHERE id = ?`).run(cohortId)
+    saveThresholds(db, { ...DEFAULT_THRESHOLDS, beachheadInterviews: 3 })
+    expect(JSON.parse(db.prepare('SELECT settings FROM cohorts WHERE id = ?').pluck().get(cohortId) as string)).toMatchObject({
+      other: 1,
+      readiness: { beachheadInterviews: 3 }
+    })
+    expect(getDashboard(db).readiness.find((r) => r.key === 'beachhead-interviews')?.label).toBe(
+      '3+ interviews logged in the beachhead segment'
+    )
+    expect(v.venture.id).toBeTruthy()
+  })
+
+  it('falls back to defaults when imported settings are malformed', () => {
+    const db = testDb()
+    createVenture(db, base, 'Sam')
+    saveThresholds(db, DEFAULT_THRESHOLDS)
+    db.prepare(`UPDATE cohorts SET settings = '{"readiness":{"painShare":"lots","segments":-4}}'`).run()
+    expect(getThresholds(db)).toEqual(DEFAULT_THRESHOLDS)
+    db.prepare(`UPDATE cohorts SET settings = 'not json'`).run()
+    expect(getThresholds(db)).toEqual(DEFAULT_THRESHOLDS)
   })
 })

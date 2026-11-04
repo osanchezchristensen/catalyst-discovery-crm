@@ -177,6 +177,38 @@ export const decisionInput = z.object({
 
 export const versionInput = z.int().min(1).optional()
 
+export const CONTACT_FIELDS = ['name', 'email', 'phone', 'role', 'organization', 'tags', 'notes'] as const
+export type ContactField = (typeof CONTACT_FIELDS)[number]
+/** Column index for each contact field (name required). Checked against the file's width when used. */
+export const contactMapping = z.object({
+  name: z.int().min(0),
+  email: z.int().min(0).nullable(),
+  phone: z.int().min(0).nullable(),
+  role: z.int().min(0).nullable(),
+  organization: z.int().min(0).nullable(),
+  tags: z.int().min(0).nullable(),
+  notes: z.int().min(0).nullable()
+})
+export type ContactMapping = z.infer<typeof contactMapping>
+export const contactImportRequest = z.object({ token: z.uuid(), mapping: contactMapping, segment_id: id.nullable() })
+export type ContactImportRequest = z.infer<typeof contactImportRequest>
+
+export const exportOptions = z.object({ includeContactDetails: z.boolean() }).optional()
+export const confirmNameInput = z.string().max(200)
+
+export type Attachment = { id: string; interview_id: string; file_name: string; mime: string; bytes: number; created_at: string }
+
+export const thresholdsInput = z.object({
+  segments: z.int().min(1).max(10),
+  beachheadInterviews: z.int().min(1).max(100),
+  riskiest: z.int().min(1).max(10),
+  interviewsPerHypothesis: z.int().min(1).max(50),
+  painScore: z.int().min(1).max(5),
+  painShare: z.number().min(0.05).max(1),
+  wtpSignals: z.int().min(0).max(50)
+})
+export type Thresholds = z.infer<typeof thresholdsInput>
+
 export const weeklyGoalInput = z.int('Use a whole number').min(1, 'Aim for at least 1 interview a week').max(20, 'Keep it to 20 or fewer')
 
 export const taskInput = workspaceTables.tasks

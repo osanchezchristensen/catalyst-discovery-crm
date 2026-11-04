@@ -6,6 +6,10 @@ import { basename, join } from 'node:path'
 import type { z } from 'zod'
 import type { AppEvent, InvokeApi } from '../shared/api'
 import {
+  confirmNameInput,
+  contactImportRequest,
+  exportOptions,
+  thresholdsInput,
   contactInput,
   contactStageInput,
   decisionInput,
@@ -24,6 +28,21 @@ import {
   type WorkspaceFile
 } from '../shared/schema'
 import { backupNow } from './backup'
+import { CsvError, decodeCsv, MAX_CSV_BYTES, parseCsv } from './csv'
+import {
+  addAttachment,
+  applyContactImport,
+  ATTACHMENT_TYPES,
+  attachmentPath,
+  deleteAttachment,
+  exportCsv,
+  listAttachments,
+  planContactImport,
+  removeInterviewFiles,
+  resetWorkspace,
+  suggestMapping
+} from './data-tools'
+import { today } from '../shared/dates'
 import * as repo from './db/repo'
 import { ImportError, MAX_IMPORT_BYTES, applyImport, exportWorkspace, parseWorkspace, previewImport } from './workspace'
 
@@ -31,6 +50,7 @@ export type Ctx = {
   db: Database.Database
   dataDir: string
   backupsDir: string
+  attachmentsDir: string
   getWindow: () => BrowserWindow | null
   send: (event: AppEvent) => void
 }
@@ -54,6 +74,11 @@ const slug = (s: string) => s.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(
 export function createActions(ctx: Ctx): Actions {
   const { db } = ctx
   let pending: { token: string; file: WorkspaceFile } | null = null
+  let pendingCsv: { token: string; rows: string[][] } | null = null
+  const csvRows = (token: string) => {
+    if (!pendingCsv || pendingCsv.token !== token) throw new Error('That import expired. Choose the file again.')
+    return pendingCsv.rows
+  }
   const dialogParent = () => ctx.getWindow() ?? undefined
 
   return {
@@ -79,7 +104,13 @@ export function createActions(ctx: Ctx): Actions {
     listInterviews: () => repo.listInterviews(db),
     getInterview: (arg) => repo.getInterview(db, parse(idInput, arg)),
     saveInterview: (arg) => repo.saveInterview(db, parse(interviewInput, arg)),
-    deleteInterview: (arg) => repo.deleteInterview(db, parse(idInput, arg)),
+    deleteInterview: async (arg) => {
+      const id = parse(idInput, arg)
+      // Only touch files for an interview that belongs to the open venture.
+      if (!repo.getInterview(db, id)) return
+      repo.deleteInterview(db, id)
+      await removeInterviewFiles(ctx.attachmentsDir, id)
+    },
     listHypotheses: (arg) => repo.listHypotheses(db, parse(versionInput, arg)),
     listHypothesisVersions: () => repo.listHypothesisVersions(db),
     saveHypothesis: (arg) => repo.saveHypothesis(db, parse(hypothesisInput, arg)),
@@ -105,7 +136,8 @@ export function createActions(ctx: Ctx): Actions {
       backupNow(db, ctx.backupsDir, at, 'manual')
       return { at: at.toISOString() }
     },
-    exportWorkspace: async () => {
+    exportWorkspace: async (arg) => {
+      const opts = parse(exportOptions, arg)
       const venture = repo.getActiveVenture(db)?.venture.name ?? 'workspace'
       const day = new Date().toISOString().slice(0, 10)
       const options = {
@@ -118,10 +150,74 @@ export function createActions(ctx: Ctx): Actions {
       if (r.canceled || !r.filePath) return { canceled: true }
       const file = exportWorkspace(db, {
         appVersion: app.getVersion(),
-        exportedBy: repo.getProfile(db)?.full_name ?? ''
+        exportedBy: repo.getProfile(db)?.full_name ?? '',
+        includeContactDetails: opts?.includeContactDetails ?? false
       })
       await writeFile(r.filePath, JSON.stringify(file, null, 2), 'utf8')
       return { path: r.filePath }
+    },
+    exportCsv: async (arg) => {
+      const opts = parse(exportOptions, arg)
+      const options = { title: 'Export CSV files into a folder', properties: ['openDirectory' as const, 'createDirectory' as const] }
+      const parent = dialogParent()
+      const r = parent ? await dialog.showOpenDialog(parent, options) : await dialog.showOpenDialog(options)
+      if (r.canceled || !r.filePaths[0]) return { canceled: true }
+      return { path: exportCsv(db, r.filePaths[0], { includeContactDetails: opts?.includeContactDetails ?? false, date: today() }) }
+    },
+    pickContactsCsv: async () => {
+      const options = { title: 'Import contacts from CSV', properties: ['openFile' as const], filters: [{ name: 'CSV file', extensions: ['csv'] }] }
+      const parent = dialogParent()
+      const r = parent ? await dialog.showOpenDialog(parent, options) : await dialog.showOpenDialog(options)
+      if (r.canceled || !r.filePaths[0]) return { canceled: true }
+      const path = r.filePaths[0]
+      if ((await stat(path)).size > MAX_CSV_BYTES) throw new CsvError('That file is larger than 5 MB.')
+      const { headers, rows } = parseCsv(decodeCsv(await readFile(path)))
+      if (!rows.length) throw new CsvError('That file has a header row but no contacts.')
+      pendingCsv = { token: randomUUID(), rows }
+      return { token: pendingCsv.token, fileName: basename(path), headers, sample: rows.slice(0, 3), rowCount: rows.length, mapping: suggestMapping(headers) }
+    },
+    previewContactImport: (arg) => {
+      const req = parse(contactImportRequest, arg)
+      const plan = planContactImport(db, csvRows(req.token), req.mapping, req.segment_id)
+      return { add: plan.add.length, duplicates: plan.duplicates, noName: plan.noName, invalid: plan.invalid.slice(0, 5) }
+    },
+    applyContactImport: (arg) => {
+      const req = parse(contactImportRequest, arg)
+      const plan = planContactImport(db, csvRows(req.token), req.mapping, req.segment_id)
+      backupNow(db, ctx.backupsDir, new Date(), 'pre-import')
+      const added = applyContactImport(db, plan)
+      pendingCsv = null
+      ctx.send({ type: 'data-changed' })
+      return { added }
+    },
+    cancelContactImport: (arg) => {
+      if (pendingCsv?.token === arg) pendingCsv = null
+    },
+    getThresholds: () => repo.getThresholds(db),
+    saveThresholds: (arg) => repo.saveThresholds(db, parse(thresholdsInput, arg)),
+    addAttachment: async (arg) => {
+      const interviewId = parse(idInput, arg)
+      const options = {
+        title: 'Attach a photo, recording, video or PDF',
+        properties: ['openFile' as const],
+        filters: [{ name: 'Photos, audio, video, PDF', extensions: Object.keys(ATTACHMENT_TYPES) }]
+      }
+      const parent = dialogParent()
+      const r = parent ? await dialog.showOpenDialog(parent, options) : await dialog.showOpenDialog(options)
+      if (r.canceled || !r.filePaths[0]) return { canceled: true }
+      return addAttachment(db, ctx.attachmentsDir, interviewId, r.filePaths[0])
+    },
+    listAttachments: (arg) => listAttachments(db, parse(idInput, arg)),
+    openAttachment: async (arg) => {
+      const error = await shell.openPath(attachmentPath(db, ctx.attachmentsDir, parse(idInput, arg)))
+      if (error) throw new Error(`Couldn't open that file: ${error}`)
+    },
+    showAttachment: (arg) => shell.showItemInFolder(attachmentPath(db, ctx.attachmentsDir, parse(idInput, arg))),
+    deleteAttachment: (arg) => deleteAttachment(db, ctx.attachmentsDir, parse(idInput, arg)),
+    resetWorkspace: async (arg) => {
+      const backup = await resetWorkspace(db, ctx.attachmentsDir, ctx.backupsDir, parse(confirmNameInput, arg))
+      ctx.send({ type: 'data-changed' })
+      return { backup }
     },
     pickImport: async () => {
       const options = { title: 'Import workspace', properties: ['openFile' as const], filters: FILTERS }

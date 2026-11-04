@@ -129,6 +129,7 @@ if (!app.requestSingleInstanceLock()) {
       db: database,
       dataDir,
       backupsDir,
+      attachmentsDir: join(dataDir, 'attachments'),
       getWindow: () => win,
       send
     }

@@ -101,7 +101,7 @@ All ids are UUIDs, so workspaces from different computers can merge on import. A
 - Nothing is sent over the network.
 - The database is backed up automatically to `backups/` on launch and once a day. One automatic backup per day is kept for the last 14 days. "Back Up Now" and pre-import backups each keep their own last 14.
 - Anyone at the computer can see the data.
-- **Workspace export:** the full workspace exports as JSON (plus CSV per table). This is how a founder shares a venture with teammates or moves to another computer. Exports leave out interviewee emails and phone numbers by default.
+- **Workspace export:** the full workspace exports as JSON (plus CSV per table). This is how a founder shares a venture with teammates or moves to another computer. Exports leave out interviewee emails and phone numbers by default. Attachments stay on this computer and are not included.
 - **Import:** imported files are untrusted input. Validate them against a schema and preview the changes before merging.
 - **Consent:** every contact has a consent checkbox and can be deleted on request.
 - **KU policy:** confirm FERPA and data-handling expectations with KU IT before launch.

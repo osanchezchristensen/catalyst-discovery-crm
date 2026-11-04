@@ -1,7 +1,8 @@
 import { useCallback, useEffect, useState } from 'react'
-import type { ImportPreview } from '../../shared/api'
+import type { ContactCsvFile, ImportPreview } from '../../shared/api'
 import type { Profile, VentureBundle } from '../../shared/schema'
 import { AboutDialog } from '@/components/AboutDialog'
+import { ContactImportDialog } from '@/components/ContactImportDialog'
 import { ImportPreviewDialog } from '@/components/ImportPreviewDialog'
 import { Sidebar, type Screen } from '@/components/Sidebar'
 import { StatusRegion, type Status } from '@/components/StatusRegion'
@@ -15,10 +16,11 @@ import { Insights } from '@/screens/Insights'
 import { InterviewEditor } from '@/screens/InterviewEditor'
 import { Interviews } from '@/screens/Interviews'
 import { VentureOverview } from '@/screens/VentureOverview'
+import { Settings } from '@/screens/Settings'
 import { Viability } from '@/screens/Viability'
 import { Welcome } from '@/screens/Welcome'
 
-const TITLES: Record<Screen, string> = { home: 'Home', venture: 'Venture', contacts: 'Contacts', hypotheses: 'Hypotheses', interviews: 'Interviews', insights: 'Insights', viability: 'Viability' }
+const TITLES: Record<Screen, string> = { home: 'Home', venture: 'Venture', contacts: 'Contacts', hypotheses: 'Hypotheses', interviews: 'Interviews', insights: 'Insights', viability: 'Viability', settings: 'Settings' }
 const api = window.api
 
 export default function App() {
@@ -31,6 +33,7 @@ export default function App() {
   const [status, setStatus] = useState<Status | null>(null)
   const [aboutOpen, setAboutOpen] = useState(false)
   const [preview, setPreview] = useState<ImportPreview | null>(null)
+  const [csvFile, setCsvFile] = useState<ContactCsvFile | null>(null)
   const [unsaved, setUnsaved] = useState(false)
   // The interview being edited (id null = new); `n` gives each open a fresh editor.
   const [editing, setEditing] = useState<{ id: string | null; n: number } | null>(null)
@@ -53,6 +56,15 @@ export default function App() {
     },
     [unsaved]
   )
+
+  const importContacts = useCallback(async () => {
+    try {
+      const r = await api.pickContactsCsv()
+      if ('token' in r) setCsvFile(r)
+    } catch (err) {
+      onError(err)
+    }
+  }, [onError])
 
   const load = useCallback(
     () =>
@@ -97,9 +109,12 @@ export default function App() {
         case 'log-interview':
           openInterview(null)
           break
+        case 'import-contacts':
+          void importContacts()
+          break
       }
     })
-  }, [load, notify, openInterview])
+  }, [load, notify, openInterview, importContacts])
 
   // The venture form and the interview editor report unsaved edits; ask before leaving them.
   // Closing the window is caught here; main asks the user (will-prevent-unload).
@@ -145,6 +160,19 @@ export default function App() {
         onApplied={(m) => notify('success', m)}
         onError={onError}
       />
+      {csvFile && venture && (
+        <ContactImportDialog
+          key={csvFile.token}
+          file={csvFile}
+          segments={venture.segments}
+          onClose={() => setCsvFile(null)}
+          onDone={(added) => {
+            setCsvFile(null)
+            notify('success', `Imported ${added} ${added === 1 ? 'contact' : 'contacts'}`)
+          }}
+          onError={onError}
+        />
+      )}
       <StatusRegion status={status} onDismiss={dismiss} />
     </>
   )
@@ -196,6 +224,19 @@ export default function App() {
                 key={loads}
                 segments={venture.segments}
                 onOpenInterview={openInterview}
+                onNotify={toastSuccess}
+                onError={onError}
+              />
+            ) : screen === 'settings' ? (
+              <Settings
+                key={loads}
+                profile={profile}
+                ventureName={venture.venture.name}
+                lastBackupAt={lastBackupAt}
+                onBackup={backup}
+                onImportWorkspace={pickImport}
+                onImportContacts={importContacts}
+                onProfileSaved={load}
                 onNotify={toastSuccess}
                 onError={onError}
               />

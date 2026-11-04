@@ -1,6 +1,6 @@
 import { randomUUID } from 'node:crypto'
 import { describe, expect, it } from 'vitest'
-import { createVenture, getActiveVenture, listContacts, listInterviews, saveHypothesis, saveInterview, saveProfile, saveVenture, listHypotheses, listDecisions, recordDecision, saveTask, saveInsight, saveGuide, listTasks, listInsights, listGuides } from './db/repo'
+import { createVenture, getActiveVenture, listContacts, listInterviews, saveHypothesis, saveInterview, saveProfile, saveVenture, listHypotheses, listDecisions, recordDecision, saveTask, saveInsight, saveGuide, listTasks, listInsights, listGuides, getThresholds, saveThresholds } from './db/repo'
 import { decisionInput, guideInput, hypothesisInput, insightInput, interviewInput, taskInput } from '../shared/schema'
 import { migrations } from './db/migrations'
 import { testDb } from './test-helpers'
@@ -81,6 +81,7 @@ describe('import merge', () => {
     saveTask(db, taskInput.parse({ title: 'Call back', due_date: '2026-11-10', interview_id: i.id, done: false }))
     saveInsight(db, insightInput.parse({ interview_id: i.id, text: 'Too slow', tags: ['speed'], is_quote: true }))
     saveGuide(db, guideInput.parse({ name: 'First calls', questions: ['Why was that hard?'] }))
+    saveThresholds(db, { ...getThresholds(db), wtpSignals: 5 })
     recordDecision(db, decisionInput.parse({ decision: 'persevere', rationale: 'Clear pain', decided_at: '2026-11-03', hypothesis_ids: [h.id] }))
     const target = testDb()
     applyImport(target, roundTrip(exportWorkspace(db, { ...opts, includeContactDetails: true })))
@@ -90,6 +91,7 @@ describe('import merge', () => {
     expect(listTasks(target)).toEqual(listTasks(db))
     expect(listInsights(target)).toEqual(listInsights(db))
     expect(listGuides(target)).toEqual(listGuides(db))
+    expect(getThresholds(target).wtpSignals).toBe(5)
     expect(listContacts(target)).toEqual(listContacts(db))
   })
 

@@ -1,10 +1,11 @@
-import { ArrowLeft, ListChecks, Plus, Quote, Sparkles, Trash2 } from 'lucide-react'
+import { ArrowLeft, ExternalLink, FolderOpen, ListChecks, Paperclip, Plus, Quote, Sparkles, Trash2, X } from 'lucide-react'
 import { useCallback, useEffect, useRef, useState, type SyntheticEvent } from 'react'
 import {
   INTERVIEW_FORMATS as FORMATS,
   VERDICTS,
   interviewInput,
   type Contact,
+  type Attachment,
   type EvidenceItem,
   type Guide,
   type Insight,
@@ -20,6 +21,9 @@ import { FORMAT_LABELS, NOTE_FIELDS, TYPE_LABELS, VERDICT_LABELS, blankContact, 
 import { formatDateTime } from '@/lib/utils'
 
 const AUTOSAVE_MS = 5000
+
+const fileSize = (bytes: number) =>
+  bytes < 1024 * 1024 ? `${Math.max(1, Math.round(bytes / 1024))} KB` : `${(bytes / (1024 * 1024)).toFixed(1)} MB`
 
 const fromInterview = (i: Interview): InterviewInput => ({
   contact_id: i.contact_id,
@@ -65,6 +69,7 @@ export function InterviewEditor({
   const [insights, setInsights] = useState<Insight[]>([])
   const [selection, setSelection] = useState({ text: '', quote: false })
   const [insightDraft, setInsightDraft] = useState<{ text: string; is_quote: boolean } | null>(null)
+  const [attachments, setAttachments] = useState<Attachment[]>([])
   const [followUpFor, setFollowUpFor] = useState('') // the next step already turned into a follow-up
   const [errors, setErrors] = useState<Record<string, string>>({})
   const [status, setStatus] = useState('')
@@ -76,6 +81,7 @@ export function InterviewEditor({
     window.api.listHypotheses().then(setHypotheses, onError)
     window.api.listGuides().then(setGuides, onError)
     if (initialId) window.api.listInsights().then((all) => setInsights(all.filter((n) => n.interview_id === initialId)), onError)
+    if (initialId) window.api.listAttachments(initialId).then(setAttachments, onError)
     if (!initialId) return
     window.api.getInterview(initialId).then((i) => {
       if (!i) return onBack()
@@ -147,6 +153,24 @@ export function InterviewEditor({
     const t = e.currentTarget
     const text = t.value.slice(t.selectionStart, t.selectionEnd).trim()
     if (text) setSelection({ text, quote })
+  }
+  const attach = async () => {
+    if (!id) return
+    try {
+      const a = await window.api.addAttachment(id)
+      if ('id' in a) setAttachments([...attachments, a])
+    } catch (err) {
+      onError(err)
+    }
+  }
+  const detach = async (a: Attachment) => {
+    if (!window.confirm(`Remove "${a.file_name}" from this interview? The copy in the app is deleted; your original file stays.`)) return
+    try {
+      await window.api.deleteAttachment(a.id)
+      setAttachments(attachments.filter((x) => x.id !== a.id))
+    } catch (err) {
+      onError(err)
+    }
   }
   const addFollowUp = async () => {
     try {
@@ -432,6 +456,45 @@ export function InterviewEditor({
             })}
           </ul>
         )}
+      </Card>
+
+      <Card>
+        <CardTitle>Attachments</CardTitle>
+        <p className="mt-1 text-[13px] text-muted-foreground">
+          Whiteboard photos or a recording the person agreed to. Photos, audio, video or PDF, up to 100 MB. Copies stay on
+          this computer.
+        </p>
+        {attachments.length > 0 && (
+          <ul className="mt-3 flex flex-col gap-1">
+            {attachments.map((a) => (
+              <li key={a.id} className="flex flex-wrap items-center gap-2">
+                <Paperclip className="size-4 shrink-0" strokeWidth={1.5} aria-hidden />
+                <span className="min-w-0 flex-1 truncate" title={a.file_name}>
+                  {a.file_name}
+                </span>
+                <span className="tabular text-[13px] text-muted-foreground">{fileSize(a.bytes)}</span>
+                <Button variant="ghost" size="sm" onClick={() => window.api.openAttachment(a.id).catch(onError)}>
+                  <ExternalLink aria-hidden strokeWidth={1.5} />
+                  Open
+                </Button>
+                <Button variant="ghost" size="sm" onClick={() => window.api.showAttachment(a.id).catch(onError)}>
+                  <FolderOpen aria-hidden strokeWidth={1.5} />
+                  Show in folder
+                </Button>
+                <Button variant="ghost-destructive" size="icon" aria-label={`Remove ${a.file_name}`} onClick={() => detach(a)}>
+                  <X aria-hidden strokeWidth={1.5} />
+                </Button>
+              </li>
+            ))}
+          </ul>
+        )}
+        <div className="mt-4 flex flex-wrap items-center gap-2">
+          <Button variant="secondary" size="sm" disabled={!id} onClick={attach}>
+            <Paperclip aria-hidden strokeWidth={1.5} />
+            Add file
+          </Button>
+          {!id && <span className="text-[13px] text-muted-foreground">Files can be added once the interview has saved.</span>}
+        </div>
       </Card>
 
       <Card>
