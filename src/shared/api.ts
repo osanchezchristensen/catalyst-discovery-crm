@@ -3,6 +3,9 @@ import type {
   Contact,
   ContactInput,
   ContactStage,
+  EvidenceLink,
+  Hypothesis,
+  HypothesisInput,
   Interview,
   InterviewInput,
   Profile,
@@ -49,6 +52,11 @@ export interface InvokeApi {
   getInterview(id: string): Promise<Interview | null>
   saveInterview(input: InterviewInput): Promise<Interview>
   deleteInterview(id: string): Promise<void>
+  listHypotheses(): Promise<Hypothesis[]>
+  saveHypothesis(input: HypothesisInput): Promise<Hypothesis>
+  deleteHypothesis(id: string): Promise<void>
+  addStarterHypotheses(): Promise<Hypothesis[]>
+  listEvidence(hypothesisId: string): Promise<EvidenceLink[]>
   backupNow(): Promise<{ at: string }>
   exportWorkspace(): Promise<{ path: string } | Canceled>
   pickImport(): Promise<ImportPreview | Canceled>
@@ -72,6 +80,11 @@ export const INVOKE_CHANNELS = [
   'getInterview',
   'saveInterview',
   'deleteInterview',
+  'listHypotheses',
+  'saveHypothesis',
+  'deleteHypothesis',
+  'addStarterHypotheses',
+  'listEvidence',
   'backupNow',
   'exportWorkspace',
   'pickImport',

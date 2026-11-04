@@ -8,6 +8,7 @@ import type { AppEvent, InvokeApi } from '../shared/api'
 import {
   contactInput,
   contactStageInput,
+  hypothesisInput,
   idInput,
   importToken,
   interviewInput,
@@ -73,6 +74,11 @@ export function createActions(ctx: Ctx): Actions {
     getInterview: (arg) => repo.getInterview(db, parse(idInput, arg)),
     saveInterview: (arg) => repo.saveInterview(db, parse(interviewInput, arg)),
     deleteInterview: (arg) => repo.deleteInterview(db, parse(idInput, arg)),
+    listHypotheses: () => repo.listHypotheses(db),
+    saveHypothesis: (arg) => repo.saveHypothesis(db, parse(hypothesisInput, arg)),
+    deleteHypothesis: (arg) => repo.deleteHypothesis(db, parse(idInput, arg)),
+    addStarterHypotheses: () => repo.addStarterHypotheses(db),
+    listEvidence: (arg) => repo.listEvidence(db, parse(idInput, arg)),
     backupNow: () => {
       const at = new Date()
       backupNow(db, ctx.backupsDir, at, 'manual')

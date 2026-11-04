@@ -1,7 +1,7 @@
 import { randomUUID } from 'node:crypto'
 import { describe, expect, it } from 'vitest'
-import { createVenture, getActiveVenture, listContacts, listInterviews, saveInterview, saveProfile, saveVenture } from './db/repo'
-import { interviewInput } from '../shared/schema'
+import { createVenture, getActiveVenture, listContacts, listInterviews, saveHypothesis, saveInterview, saveProfile, saveVenture, listHypotheses } from './db/repo'
+import { hypothesisInput, interviewInput } from '../shared/schema'
 import { migrations } from './db/migrations'
 import { testDb } from './test-helpers'
 import { ImportError, applyImport, exportWorkspace, parseWorkspace, previewImport } from './workspace'
@@ -70,14 +70,17 @@ describe('import merge', () => {
   it('round-trips contacts and interviews with decoded fields intact', () => {
     const { db } = seeded()
     const [pat] = listContacts(db)
+    const h = saveHypothesis(db, hypothesisInput.parse({ type: 'problem', statement: 'Food arrives cold', risk: 'high', status: 'testing', success_criteria: '' }))
     saveInterview(db, interviewInput.parse({
       contact_id: pat.id, date: '2026-11-03', format: 'phone', interviewers: ['Sam'], quotes: 'Too slow', pain_score: 5,
       wtp_signal: 'Would pilot', next_step: '', follow_up_date: '2026-11-10',
-      notes: { behavior: 'a', pains: 'b', solutions: 'c', budget: 'd' }
+      notes: { behavior: 'a', pains: 'b', solutions: 'c', budget: 'd' },
+      evidence: [{ hypothesis_id: h.id, verdict: 'supports', note: 'Said it twice' }]
     }))
     const target = testDb()
     applyImport(target, roundTrip(exportWorkspace(db, { ...opts, includeContactDetails: true })))
     expect(listInterviews(target)).toEqual(listInterviews(db))
+    expect(listHypotheses(target)).toEqual(listHypotheses(db))
     expect(listContacts(target)).toEqual(listContacts(db))
   })
 

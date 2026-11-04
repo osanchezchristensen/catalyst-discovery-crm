@@ -1,10 +1,19 @@
 import { ArrowLeft, Plus, Trash2 } from 'lucide-react'
 import { useCallback, useEffect, useRef, useState } from 'react'
-import { INTERVIEW_FORMATS as FORMATS, interviewInput, type Contact, type Interview, type InterviewInput } from '../../../shared/schema'
+import {
+  INTERVIEW_FORMATS as FORMATS,
+  VERDICTS,
+  interviewInput,
+  type Contact,
+  type EvidenceItem,
+  type Hypothesis,
+  type Interview,
+  type InterviewInput
+} from '../../../shared/schema'
 import { SelectField, TextAreaField, TextField } from '@/components/Field'
 import { Button } from '@/components/ui/button'
 import { Card, CardTitle } from '@/components/ui/card'
-import { FORMAT_LABELS, NOTE_FIELDS, blankContact, blankInterview, fieldErrors } from '@/lib/discovery'
+import { FORMAT_LABELS, NOTE_FIELDS, TYPE_LABELS, VERDICT_LABELS, blankContact, blankInterview, fieldErrors } from '@/lib/discovery'
 import { formatDateTime } from '@/lib/utils'
 
 const AUTOSAVE_MS = 5000
@@ -19,7 +28,8 @@ const fromInterview = (i: Interview): InterviewInput => ({
   pain_score: i.pain_score,
   wtp_signal: i.wtp_signal,
   next_step: i.next_step,
-  follow_up_date: i.follow_up_date
+  follow_up_date: i.follow_up_date,
+  evidence: i.evidence
 })
 
 /** Worth saving once it has a date and either a contact or some notes. */
@@ -46,6 +56,7 @@ export function InterviewEditor({
   const [saved, setSaved] = useState(() => (initialId ? '' : JSON.stringify(blankInterview())))
   const [id, setId] = useState(initialId)
   const [contacts, setContacts] = useState<Contact[]>([])
+  const [hypotheses, setHypotheses] = useState<Hypothesis[]>([])
   const [errors, setErrors] = useState<Record<string, string>>({})
   const [status, setStatus] = useState('')
   const [quickContact, setQuickContact] = useState('')
@@ -53,6 +64,7 @@ export function InterviewEditor({
 
   useEffect(() => {
     window.api.listContacts().then(setContacts, onError)
+    window.api.listHypotheses().then(setHypotheses, onError)
     if (!initialId) return
     window.api.getInterview(initialId).then((i) => {
       if (!i) return onBack()
@@ -122,6 +134,16 @@ export function InterviewEditor({
   const people = [...new Set([...team, ...draft.interviewers])]
   const set = (patch: Partial<InterviewInput>) => setDraft({ ...draft, ...patch })
   const setNote = (key: keyof InterviewInput['notes'], value: string) => set({ notes: { ...draft.notes, [key]: value } })
+  const evidence = draft.evidence ?? []
+  const linkOf = (hypothesisId: string) => evidence.find((e) => e.hypothesis_id === hypothesisId)
+  /** verdict null removes the link; otherwise adds or updates it. */
+  const setLink = (hypothesisId: string, patch: Partial<EvidenceItem> | null) => {
+    const old = linkOf(hypothesisId)
+    const rest = evidence.filter((e) => e.hypothesis_id !== hypothesisId)
+    if (!patch) return set({ evidence: rest })
+    const next: EvidenceItem = { hypothesis_id: hypothesisId, verdict: 'supports', note: '', ...old, ...patch }
+    set({ evidence: old ? evidence.map((e) => (e.hypothesis_id === hypothesisId ? next : e)) : [...evidence, next] })
+  }
 
   const done = async () => {
     if (!dirty || (await save(true))) {
@@ -268,6 +290,58 @@ export function InterviewEditor({
             />
           </div>
         </div>
+      </Card>
+
+      <Card>
+        <CardTitle>Evidence</CardTitle>
+        <p className="mt-1 text-[13px] text-muted-foreground">
+          For each hypothesis, did this interview support it, refute it, or neither?
+        </p>
+        {hypotheses.length === 0 ? (
+          <p className="mt-4">No hypotheses yet. Add them on the Hypotheses screen, then link this interview.</p>
+        ) : (
+          <ul className="mt-4 flex flex-col gap-4">
+            {hypotheses.map((h) => {
+              const link = linkOf(h.id)
+              return (
+                <li key={h.id}>
+                  <fieldset>
+                    <legend className="font-semibold break-words">
+                      <span className="text-[13px] font-normal text-muted-foreground">{TYPE_LABELS[h.type]}: </span>
+                      {h.statement}
+                    </legend>
+                    <div className="mt-1 flex flex-wrap gap-4">
+                      {([null, ...VERDICTS] as const).map((v) => (
+                        <label key={v ?? 'none'} className="flex items-center gap-2">
+                          <input
+                            type="radio"
+                            name={`verdict-${h.id}`}
+                            className="size-4 accent-primary"
+                            checked={(link?.verdict ?? null) === v}
+                            onChange={() => setLink(h.id, v ? { verdict: v } : null)}
+                          />
+                          {v ? VERDICT_LABELS[v] : 'Not linked'}
+                        </label>
+                      ))}
+                    </div>
+                    {link && (
+                      <div className="mt-2">
+                        <TextField
+                          label={`Evidence note for: ${h.statement}`}
+                          hideLabel
+                          placeholder="What did they say or do that shows this…"
+                          value={link.note}
+                          onChange={(e) => setLink(h.id, { note: e.target.value })}
+                          maxLength={20000}
+                        />
+                      </div>
+                    )}
+                  </fieldset>
+                </li>
+              )
+            })}
+          </ul>
+        )}
       </Card>
 
       <Card>

@@ -1,6 +1,11 @@
 import { describe, expect, it } from 'vitest'
 import { randomUUID } from 'node:crypto'
 import {
+  addStarterHypotheses,
+  deleteHypothesis,
+  listEvidence,
+  listHypotheses,
+  saveHypothesis,
   createVenture,
   deleteContact,
   deleteInterview,
@@ -16,7 +21,7 @@ import {
   setContactStage
 } from './repo'
 import { testDb } from '../test-helpers'
-import { contactInput, interviewInput, ventureBundleInput } from '../../shared/schema'
+import { contactInput, hypothesisInput, interviewInput, ventureBundleInput } from '../../shared/schema'
 
 const base = { name: 'Campus Eats', pitch: '', problem: '', stage: 1, semester: 'Fall 2026' }
 
@@ -161,5 +166,75 @@ describe('interviews', () => {
     const [first, second] = listInterviews(db)
     expect(first).toMatchObject({ id: newer.id, interviewers: [], notes: { behavior: '', pains: '' } })
     expect(second.date).toBe('2026-10-01')
+  })
+})
+
+const hypothesis = (over: Record<string, unknown> = {}) =>
+  hypothesisInput.parse({ type: 'problem', statement: 'Students eat late', risk: 'high', status: 'untested', success_criteria: '', ...over })
+
+describe('hypotheses and evidence', () => {
+  it('creates, edits and deletes hypotheses, with starters', () => {
+    const db = testDb()
+    createVenture(db, base, 'Sam')
+    expect(addStarterHypotheses(db).map((h) => h.type)).toEqual(['customer', 'problem', 'solution'])
+    const h = saveHypothesis(db, hypothesis())
+    expect(h).toMatchObject({ version: 1, tally: { supports: 0, refutes: 0, neutral: 0 }, suggested: 'untested' })
+    expect(saveHypothesis(db, hypothesis({ id: h.id, status: 'testing' })).status).toBe('testing')
+    deleteHypothesis(db, h.id)
+    expect(listHypotheses(db)).toHaveLength(3)
+    expect(() => saveHypothesis(db, hypothesis({ id: randomUUID() }))).toThrow(/no longer exists/)
+  })
+
+  it('saves evidence with the interview as a set, tallies it and suggests a status', () => {
+    const db = testDb()
+    createVenture(db, base, 'Sam')
+    const h = saveHypothesis(db, hypothesis())
+    const ids = [0, 1, 2, 3, 4].map(
+      (n) => saveInterview(db, interview({ evidence: [{ hypothesis_id: h.id, verdict: n < 4 ? 'supports' : 'refutes', note: '' }] })).id
+    )
+    expect(listHypotheses(db)[0]).toMatchObject({ tally: { supports: 4, refutes: 1, neutral: 0 }, suggested: 'validated' })
+
+    // Changing the verdict updates the one row; removing it deletes the link.
+    saveInterview(db, interview({ id: ids[0], evidence: [{ hypothesis_id: h.id, verdict: 'neutral', note: 'unclear' }] }))
+    expect(getInterview(db, ids[0])?.evidence).toEqual([{ hypothesis_id: h.id, verdict: 'neutral', note: 'unclear' }])
+    saveInterview(db, interview({ id: ids[1], evidence: [] }))
+    expect(listHypotheses(db)[0].tally).toEqual({ supports: 2, refutes: 1, neutral: 1 })
+    expect(listEvidence(db, h.id)).toHaveLength(4)
+    expect(listInterviews(db).find((i) => i.id === ids[2])?.evidence).toHaveLength(1)
+
+    deleteInterview(db, ids[2])
+    expect(listEvidence(db, h.id)).toHaveLength(3)
+    deleteHypothesis(db, h.id)
+    expect(getInterview(db, ids[3])?.evidence).toEqual([])
+  })
+
+  it('rejects evidence for an unknown hypothesis or the same hypothesis twice', () => {
+    const db = testDb()
+    createVenture(db, base, 'Sam')
+    const h = saveHypothesis(db, hypothesis())
+    expect(() => saveInterview(db, interview({ evidence: [{ hypothesis_id: randomUUID(), verdict: 'supports', note: '' }] }))).toThrow(
+      /hypothesis no longer exists/
+    )
+    expect(() =>
+      interview({
+        evidence: [
+          { hypothesis_id: h.id, verdict: 'supports', note: '' },
+          { hypothesis_id: h.id, verdict: 'refutes', note: '' }
+        ]
+      })
+    ).toThrow(/linked once/)
+  })
+
+  it('lists only the current version', () => {
+    const db = testDb()
+    const v = createVenture(db, base, 'Sam')
+    saveHypothesis(db, hypothesis({ statement: 'old' }))
+    const t = new Date().toISOString()
+    db.prepare(
+      `INSERT INTO hypotheses (id, venture_id, version, type, statement, risk, status, success_criteria, created_at, updated_at)
+       VALUES (?, ?, 2, 'problem', 'new', 'high', 'untested', '', ?, ?)`
+    ).run(randomUUID(), v.venture.id, t, t)
+    expect(listHypotheses(db).map((h) => h.statement)).toEqual(['new'])
+    expect(saveHypothesis(db, hypothesis({ statement: 'added' })).version).toBe(2)
   })
 })
