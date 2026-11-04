@@ -46,7 +46,7 @@ Notes:
 - **agent-skills:** the process backbone. The PRD already exists, so skip `/spec` and start at `/plan`.
 - **ponytail:** run in `lite` mode. Run `ponytail-review` before each PR. Never cut a PRD P0 feature, input validation, error handling, migrations, backups or accessibility.
 - **web-design-guidelines:** run it on changed UI files before each PR. Ignore its SSR and hydration rules (this is not a web app).
-- **security-audit (Cloudflare):** run a full audit at the end of Phase 1, at the end of Phase 5, and before every release. Never commit its output.
+- **security-audit (Cloudflare):** run a full audit at the end of Phase 1 and before every release. Never commit its output.
 - **graphify:** use only once `src/` has about 30 files. Write its output to `graphify-out/`, never into `docs/`.
 - **Taste Skill** and **Awesome Design** are not used for app screens. `brand-kit.md` is the design system.
 

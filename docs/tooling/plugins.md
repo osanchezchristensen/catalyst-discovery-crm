@@ -7,7 +7,7 @@ Use four of the nine plugins now (Agent Skills, Ponytail, Web Design Guidelines,
 | [Agent Skills](#agent-skills-addy-osmani) | Plan → build → test → review → ship workflow (24 skills, 7 commands) | **Use**: process backbone | Every phase |
 | [Ponytail](#ponytail) | Pushes the agent to reuse code and write less of it; reviews diffs for over-engineering | **Use**, lite mode | Always on; `ponytail-review` before each PR |
 | [Web Design Guidelines](#web-design-guidelines-vercel) | Reviews UI code against Vercel's interface rules (a11y, focus, forms) | **Use**: UI review gate | Before each PR that touches UI |
-| [Cloudflare Security Audit](#cloudflare-security-audit) | Finds exploitable bugs, including desktop and local IPC issues | **Use**: milestone gate | End of Phase 1, end of Phase 5, every release |
+| [Cloudflare Security Audit](#cloudflare-security-audit) | Finds exploitable bugs, including desktop and local IPC issues | **Use**: milestone gate | End of Phase 1, every release |
 | [Graphify](#graphify) | Turns the codebase into a queryable knowledge graph with an Obsidian export | **Later** | Once `src/` has about 30 files (around Phase 3) |
 | [Stageshow](#stageshow) | Builds polished faux product UI, stills and cursor demos in React | **Later**, marketing only | Demo day, pitch slides, README hero image |
 | [Taste Skill](#taste-skill) | Opinionated, studio-style frontend design direction | **Skip** for app screens | Optional: a marketing page |
@@ -52,7 +52,7 @@ Restart Claude Code and run `/plugin` to confirm both are enabled.
 3. **Test:** run `/test`, then `npm run typecheck && npm run lint && npm test`, then launch the app with `npm run dev`.
 4. **UI review:** "Review the changed files in src/renderer with web-design-guidelines." Then check the screens against the brand kit.
 5. **Simplify:** run `ponytail-review` on the diff and cut what it flags, unless the cut breaks a PRD requirement.
-6. **Security** (Phases 1 and 5, and releases only): "Run a full security audit of this repo."
+6. **Security** (Phase 1 and releases only): "Run a full security audit of this repo."
 7. **Ship:** run `/review`, write the dev-log entry, add an ADR for any lasting decision, then open a PR using the template. At release time, `/ship` covers the version tag and release notes.
 
 ## Agent Skills (Addy Osmani)
@@ -89,7 +89,7 @@ Restart Claude Code and run `/plugin` to confirm both are enabled.
   - **Output:** `findings.json`, `REPORT.md`, `FINDINGS-DETAIL.md` and `NEEDS-VALIDATION.md`, written to `~/security-audit-skill/<repo>/run-N`. That folder is outside the repo, so the reports don't get committed by accident.
 - **Use for:** a full audit when the attack surface changes.
   - **Phase 1:** the preload and IPC API, plus CSP.
-  - **Phase 5:** JSON import from other students' files (untrusted input), CSV export formula injection, file paths.
+  - **Releases:** JSON import from other students' files (untrusted input), CSV export formula injection, file paths.
   - **Every release:** run it twice, because one pass finds roughly half the issues and later runs build on earlier ones.
 - **How:** say "Run a full security audit." Without that explicit ask, it stays in lighter guidance mode.
 - **Watch out:** it doesn't require Cloudflare hosting. Treat "needs validation" findings as open until you confirm or reject them.

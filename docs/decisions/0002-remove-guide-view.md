@@ -11,7 +11,7 @@ Remove Guide view entirely: the header switch, the View menu items, read-only mo
 
 ## Consequences
 - Every student always sees the editable Founder screens. Less code and one less mode to test.
-- The Guide parts of Phase 5 (comments, check-ins, cohort view built from imported workspaces) and the "Guide check-in" flow in the PRD no longer have a mode to live in. They must be redesigned or dropped before Phase 5 starts.
+- PRD Phase 5 (Guide feedback F11, cohort and admin console F13, the Guide check-in flow and the Cohort view) is dropped. CSV export moves to Phase 6. The `guide_assignments` and `comments` tables stay in the schema, unused, until a migration removes them.
 - Bringing Guide view back needs a new migration that adds the column again.
 
 ## Alternatives considered
