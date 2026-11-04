@@ -2,6 +2,7 @@
 // Table schemas mirror the SQL in src/main/db/migrations.ts; a test keeps them in sync.
 import { z } from 'zod'
 import type { HypothesisStatus, Tally } from './evidence'
+import type { ReadinessItem } from './readiness'
 
 const isJson = (s: string): boolean => {
   try {
@@ -161,6 +162,27 @@ export const interviewInput = workspaceTables.interviews
       .default([])
   })
 
+export const decisionInput = z.object({
+  decision: z.enum(DECISIONS),
+  rationale: long.trim().min(1, 'Explain why you decided this'),
+  decided_at: date,
+  hypothesis_ids: z
+    .array(id)
+    .max(50)
+    .refine((ids) => new Set(ids).size === ids.length, 'Each hypothesis can be cited once')
+})
+
+export const versionInput = z.int().min(1).optional()
+
+/** A hypothesis as it stood when a decision cited it (stored as JSON in decisions.evidence_ids; imports are untrusted). */
+export const hypothesisSnapshot = z.object({
+  hypothesis_id: z.string().max(100),
+  statement: long,
+  status: z.enum(HYPOTHESIS_STATUSES),
+  tally: z.object({ supports: z.int().min(0), refutes: z.int().min(0), neutral: z.int().min(0) }),
+  version: z.int().min(1)
+})
+
 export const hypothesisInput = workspaceTables.hypotheses
   .pick({ type: true, statement: true, risk: true, status: true, success_criteria: true })
   .extend({ id: id.optional() })
@@ -197,5 +219,27 @@ export type HypothesisInput = z.input<typeof hypothesisInput>
 type HypothesisRow = z.infer<(typeof workspaceTables)['hypotheses']>
 /** A current-version hypothesis with its evidence tally and the status the evidence suggests. */
 export type Hypothesis = HypothesisRow & { tally: Tally; suggested: HypothesisStatus }
+export type DecisionKind = (typeof DECISIONS)[number]
+export type DecisionInput = z.input<typeof decisionInput>
+export type HypothesisSnapshot = z.infer<typeof hypothesisSnapshot>
+export type Decision = {
+  id: string
+  decision: DecisionKind
+  rationale: string
+  decided_at: string
+  hypotheses: HypothesisSnapshot[]
+  created_at: string
+}
+
+export type Dashboard = {
+  perWeek: { week: string; count: number }[]
+  bySegment: { segment: string; count: number }[]
+  pain: { score: number; all: number; beachhead: number }[]
+  hasBeachhead: boolean
+  hypotheses: Hypothesis[]
+  decisions: Decision[]
+  readiness: ReadinessItem[]
+}
+
 /** One interview's verdict on a hypothesis, for the drill-down. */
 export type EvidenceLink = EvidenceItem & { interview_id: string; date: string; contact_name: string | null }

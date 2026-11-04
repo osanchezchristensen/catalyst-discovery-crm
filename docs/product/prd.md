@@ -85,7 +85,7 @@ These thresholds are defaults that can be edited per cohort. Confirm them with p
 | hypotheses | id, venture_id, version, type, statement, risk, status, success_criteria | linked through evidence |
 | evidence | id, hypothesis_id, interview_id, verdict (supports, refutes, neutral), note | joins interviews to hypotheses |
 | insights | id, venture_id, interview_id, text, tags, is_quote | from interviews |
-| decisions | id, venture_id, decision, rationale, decided_at, evidence_ids | pivot history |
+| decisions | id, venture_id, decision, rationale, decided_at, evidence_ids (JSON: the cited hypotheses with their status and tally at decision time) | pivot history; a pivot copies hypotheses into a new version |
 | tasks | id, venture_id, assignee_name, title, due_date, done, interview_id | follow-ups |
 | attachments | id, interview_id, file_name, stored_path, mime, bytes | F15 |
 | meta | key, value | schema_version, last_backup_at, workspace_id |

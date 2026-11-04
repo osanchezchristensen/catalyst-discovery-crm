@@ -1,6 +1,13 @@
 import { describe, expect, it } from 'vitest'
 import { randomUUID } from 'node:crypto'
 import {
+  decodeSnapshots,
+  deleteDecision,
+  getDashboard,
+  listDecisions,
+  listHypothesisVersions,
+  recordDecision,
+  weekStart,
   addStarterHypotheses,
   deleteHypothesis,
   listEvidence,
@@ -21,7 +28,7 @@ import {
   setContactStage
 } from './repo'
 import { testDb } from '../test-helpers'
-import { contactInput, hypothesisInput, interviewInput, ventureBundleInput } from '../../shared/schema'
+import { contactInput, decisionInput, hypothesisInput, interviewInput, ventureBundleInput } from '../../shared/schema'
 
 const base = { name: 'Campus Eats', pitch: '', problem: '', stage: 1, semester: 'Fall 2026' }
 
@@ -236,5 +243,123 @@ describe('hypotheses and evidence', () => {
     ).run(randomUUID(), v.venture.id, t, t)
     expect(listHypotheses(db).map((h) => h.statement)).toEqual(['new'])
     expect(saveHypothesis(db, hypothesis({ statement: 'added' })).version).toBe(2)
+  })
+})
+
+const decision = (over: Record<string, unknown> = {}) =>
+  decisionInput.parse({ decision: 'persevere', rationale: 'Strong pain', decided_at: '2026-11-03', hypothesis_ids: [], ...over })
+
+describe('decisions', () => {
+  it('stores hypothesis snapshots and sets the venture status', () => {
+    const db = testDb()
+    createVenture(db, base, 'Sam')
+    const h = saveHypothesis(db, hypothesis())
+    saveInterview(db, interview({ evidence: [{ hypothesis_id: h.id, verdict: 'supports', note: '' }] }))
+    const d = recordDecision(db, decision({ decision: 'pause', hypothesis_ids: [h.id] }))
+    expect(d).toMatchObject({ decision: 'pause', decided_at: '2026-11-03T12:00:00.000Z' })
+    expect(d.hypotheses).toEqual([
+      { hypothesis_id: h.id, statement: 'Students eat late', status: 'untested', tally: { supports: 1, refutes: 0, neutral: 0 }, version: 1 }
+    ])
+    expect(getActiveVenture(db)?.venture.status).toBe('paused')
+    // The snapshot does not change when the hypothesis does later.
+    saveHypothesis(db, hypothesis({ id: h.id, statement: 'Changed', status: 'validated' }))
+    expect(listDecisions(db)[0].hypotheses[0]).toMatchObject({ statement: 'Students eat late', status: 'untested' })
+    recordDecision(db, decision())
+    expect(getActiveVenture(db)?.venture.status).toBe('active')
+    deleteDecision(db, d.id)
+    expect(listDecisions(db)).toHaveLength(1)
+  })
+
+  it('a pivot copies current hypotheses into a new version and leaves evidence on the old one', () => {
+    const db = testDb()
+    createVenture(db, base, 'Sam')
+    const a = saveHypothesis(db, hypothesis({ statement: 'A', status: 'invalidated' }))
+    saveHypothesis(db, hypothesis({ statement: 'B' }))
+    saveInterview(db, interview({ evidence: [{ hypothesis_id: a.id, verdict: 'refutes', note: '' }] }))
+    recordDecision(db, decision({ decision: 'pivot', hypothesis_ids: [a.id] }))
+    expect(listHypothesisVersions(db)).toEqual([1, 2])
+    const v2 = listHypotheses(db)
+    expect(v2.map((h) => [h.statement, h.status, h.version, h.tally.refutes])).toEqual([
+      ['A', 'untested', 2, 0],
+      ['B', 'untested', 2, 0]
+    ])
+    expect(listHypotheses(db, 1).find((h) => h.statement === 'A')?.tally.refutes).toBe(1)
+    // New hypotheses join the current version; old ones can still be edited and come back from their own version.
+    expect(saveHypothesis(db, hypothesis({ statement: 'C' })).version).toBe(2)
+    expect(saveHypothesis(db, hypothesis({ id: a.id, statement: 'A old' })).version).toBe(1)
+  })
+
+  it('rejects a hypothesis from another version or venture, and rolls back on error', () => {
+    const db = testDb()
+    createVenture(db, base, 'Sam')
+    const old = saveHypothesis(db, hypothesis())
+    recordDecision(db, decision({ decision: 'pivot' }))
+    expect(() => recordDecision(db, decision({ hypothesis_ids: [old.id] }))).toThrow(/no longer exists/)
+    expect(() => recordDecision(db, decision({ hypothesis_ids: [randomUUID()] }))).toThrow(/no longer exists/)
+    expect(listDecisions(db)).toHaveLength(1)
+    expect(() => decision({ rationale: '  ' })).toThrow(/Explain why/)
+  })
+})
+
+describe('dashboard', () => {
+  it('weeks start on Monday, across a month boundary', () => {
+    expect(weekStart('2026-11-01')).toBe('2026-10-26') // Sunday
+    expect(weekStart('2026-11-02')).toBe('2026-11-02') // Monday
+    expect(weekStart('2026-12-31')).toBe('2026-12-28')
+  })
+
+  it('aggregates interviews by week, segment and pain, and fills empty weeks', () => {
+    const db = testDb()
+    const v = createVenture(db, base, 'Sam')
+    const segs = saveVenture(db, {
+      venture: v.venture,
+      members: [],
+      segments: [
+        { name: 'Freshmen', description: '', is_beachhead: true },
+        { name: 'Staff', description: '', is_beachhead: false }
+      ]
+    }).segments
+    const fresh = saveContact(db, contact({ segment_id: segs[0].id }))
+    saveInterview(db, interview({ contact_id: fresh.id, date: '2026-10-07', pain_score: 5 }))
+    saveInterview(db, interview({ contact_id: fresh.id, date: '2026-10-08', pain_score: 4 }))
+    saveInterview(db, interview({ date: '2026-10-21', pain_score: 4 }))
+    const d = getDashboard(db)
+    expect(d.perWeek).toEqual([
+      { week: '2026-10-05', count: 2 },
+      { week: '2026-10-12', count: 0 },
+      { week: '2026-10-19', count: 1 }
+    ])
+    expect(d.bySegment).toEqual([
+      { segment: 'Freshmen', count: 2 },
+      { segment: 'No segment', count: 1 }
+    ])
+    expect(d.pain.find((p) => p.score === 4)).toEqual({ score: 4, all: 2, beachhead: 1 })
+    expect(d.readiness.find((r) => r.key === 'pain')?.done).toBe(true)
+    expect(d.hasBeachhead).toBe(true)
+  })
+
+  it('shows at most 26 weeks and ignores mistyped future dates', () => {
+    const db = testDb()
+    createVenture(db, base, 'Sam')
+    saveInterview(db, interview({ date: '2020-01-06' }))
+    saveInterview(db, interview({ date: '2025-01-06' }))
+    saveInterview(db, interview({ date: '2062-01-02' }))
+    const { perWeek } = getDashboard(db)
+    expect(perWeek).toHaveLength(26)
+    expect(perWeek[25]).toEqual({ week: '2025-01-06', count: 1 })
+  })
+
+  it('drops malformed decision snapshots from imported files', () => {
+    const good = { hypothesis_id: 'h', statement: 'S', status: 'mixed', tally: { supports: 1, refutes: 1, neutral: 0 }, version: 1 }
+    const text = JSON.stringify([good, { ...good, status: 'bogus' }, { ...good, tally: {} }, 'h2', null])
+    expect(decodeSnapshots(text)).toEqual([good])
+    expect(decodeSnapshots('{"not":"an array"}')).toEqual([])
+    expect(decodeSnapshots('not json')).toEqual([])
+  })
+
+  it('is empty, not broken, with no interviews', () => {
+    const db = testDb()
+    createVenture(db, base, 'Sam')
+    expect(getDashboard(db)).toMatchObject({ perWeek: [], bySegment: [], hasBeachhead: false })
   })
 })

@@ -14,9 +14,10 @@ import { Hypotheses } from '@/screens/Hypotheses'
 import { InterviewEditor } from '@/screens/InterviewEditor'
 import { Interviews } from '@/screens/Interviews'
 import { VentureOverview } from '@/screens/VentureOverview'
+import { Viability } from '@/screens/Viability'
 import { Welcome } from '@/screens/Welcome'
 
-const TITLES: Record<Screen, string> = { home: 'Home', venture: 'Venture', contacts: 'Contacts', hypotheses: 'Hypotheses', interviews: 'Interviews' }
+const TITLES: Record<Screen, string> = { home: 'Home', venture: 'Venture', contacts: 'Contacts', hypotheses: 'Hypotheses', interviews: 'Interviews', viability: 'Viability' }
 const api = window.api
 
 export default function App() {
@@ -197,6 +198,8 @@ export default function App() {
                 onNotify={toastSuccess}
                 onError={onError}
               />
+            ) : screen === 'viability' ? (
+              <Viability key={loads} onNotify={toastSuccess} onError={onError} />
             ) : screen === 'hypotheses' ? (
               <Hypotheses key={loads} onOpenInterview={openInterview} onNotify={toastSuccess} onError={onError} />
             ) : screen === 'interviews' && editing ? (
