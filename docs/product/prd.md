@@ -137,7 +137,7 @@ All ids are UUIDs, so workspaces from different computers can merge on import. A
   - CSV export guards against formula injection.
 - **Offline:** no telemetry, analytics, auto-update calls, remote fonts or scripts.
 - **Durability:** schema migrations never drop user data. A backup is taken before every migration.
-- **Stack:** Electron, Vite, React, TypeScript, Tailwind, shadcn/ui, Recharts, Lucide, better-sqlite3, Vitest, electron-builder.
+- **Stack:** Electron, Vite, React, TypeScript, Tailwind, shadcn/ui, Recharts, Lucide, zod, better-sqlite3, Vitest, electron-builder.
 
 ## Build roadmap (one Claude Code session per phase)
 1. **Phase 1 — Foundation:** Electron shell, SQLite with migrations, typed IPC, brand tokens, layout and sidebar, welcome screen, venture workspace, JSON export/import, automatic backups (F1, F2).
