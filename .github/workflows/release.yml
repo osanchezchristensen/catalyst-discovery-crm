@@ -58,7 +58,8 @@ jobs:
           path: installers
           merge-multiple: true
       - name: Create draft release
-        run: gh release create "$TAG" installers/* --draft --title "Catalyst Discovery CRM $TAG" --generate-notes --repo "$REPO"
+        # upload-artifact keeps the release/<version>/ folder, so the files arrive as installers/<version>/<file>.
+        run: gh release create "$TAG" installers/*/* --draft --title "Catalyst Discovery CRM $TAG" --generate-notes --repo "$REPO"
         env:
           GH_TOKEN: ${{ github.token }}
           TAG: ${{ github.ref_name }}
