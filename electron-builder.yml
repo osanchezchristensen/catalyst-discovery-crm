@@ -39,6 +39,9 @@ mac:
   icon: build/icon.png
   # Unsigned beta (ADR 0004): no hardened runtime until KU provides a Developer ID for notarization.
   hardenedRuntime: false
+  # better-sqlite3 ships one prebuild per arch, so the same .node files sit in both halves of the universal app.
+  # Each arch loads its own at runtime, so they need no merging.
+  x64ArchFiles: Contents/Resources/app.asar.unpacked/node_modules/better-sqlite3/prebuilds/*.node
 linux:
   target: AppImage
   category: Office
