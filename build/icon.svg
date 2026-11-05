@@ -1,0 +1,8 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1024 1024" width="1024" height="1024">
+  <!-- Catalyst Discovery CRM app icon: a speech bubble with a check (brand kit: KU Blue #0051BA on white).
+       A simple geometric mark; not a KU logo. Source for build/icon.png (scripts/render-icon.cjs). -->
+  <rect x="32" y="32" width="960" height="960" rx="216" fill="#FFFFFF"/>
+  <rect x="176" y="200" width="672" height="500" rx="132" fill="#0051BA"/>
+  <path d="M 330 660 L 286 842 L 486 690 Z" fill="#0051BA"/>
+  <polyline points="356,452 470,566 672,364" fill="none" stroke="#FFFFFF" stroke-width="76" stroke-linecap="round" stroke-linejoin="round"/>
+</svg>

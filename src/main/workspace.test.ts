@@ -168,7 +168,20 @@ describe('import merge', () => {
   it('normalizes timestamps so text comparison is safe', () => {
     const { db } = seeded()
     const file = exportWorkspace(db, opts)
-    file.tables.ventures[0].updated_at = '2030-01-01T00:00:00Z'
-    expect(roundTrip(file).tables.ventures[0].updated_at).toBe('2030-01-01T00:00:00.000Z')
+    file.tables.ventures[0].updated_at = '2020-01-01T00:00:00Z'
+    expect(roundTrip(file).tables.ventures[0].updated_at).toBe('2020-01-01T00:00:00.000Z')
+  })
+
+  it('caps timestamps from the future at the import time', () => {
+    const { db } = seeded()
+    const file = exportWorkspace(db, opts)
+    file.tables.ventures[0].created_at = '9999-12-31T00:00:00Z'
+    file.tables.ventures[0].updated_at = '9999-12-31T00:00:00Z'
+    const before = new Date().toISOString()
+    const venture = roundTrip(file).tables.ventures[0]
+    const after = new Date().toISOString()
+    for (const t of [venture.created_at, venture.updated_at]) {
+      expect(t >= before && t <= after).toBe(true)
+    }
   })
 })

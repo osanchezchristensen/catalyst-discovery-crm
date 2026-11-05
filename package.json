@@ -1,7 +1,7 @@
 {
   "name": "catalyst-discovery-crm",
   "productName": "Catalyst Discovery CRM",
-  "version": "0.1.0",
+  "version": "0.9.0",
   "description": "Offline customer-discovery CRM for The Catalyst cohort at KU",
   "private": true,
   "main": "./out/main/index.js",
@@ -54,5 +54,6 @@
     "typescript-eslint": "^8.72.1",
     "vite": "^8.3.5",
     "vitest": "^5.0.5"
-  }
+  },
+  "homepage": "https://github.com/osanchezchristensen/catalyst-discovery-crm"
 }

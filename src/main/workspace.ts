@@ -58,6 +58,14 @@ export function parseWorkspace(text: string): WorkspaceFile {
     const where = issue.path.length ? ` (at ${issue.path.join('.')})` : ''
     throw new ImportError(`That workspace file has a problem: ${issue.message}${where}.`)
   }
+  // A future timestamp would win every later merge and hide teammates' real edits, so cap it at now.
+  const nowIso = new Date().toISOString()
+  for (const rows of Object.values(result.data.tables) as Row[][]) {
+    for (const row of rows) {
+      if (row.updated_at > nowIso) row.updated_at = nowIso
+      if ((row.created_at as string) > nowIso) row.created_at = nowIso
+    }
+  }
   return result.data
 }
 
