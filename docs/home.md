@@ -4,6 +4,7 @@ An offline desktop app where Catalyst founders log customer interviews, test hyp
 
 ## Specs
 - [Product requirements (PRD)](product/prd.md)
+- [Backlog: next version](product/backlog.md)
 - [Brand kit](brand/brand-kit.md) · [Design tokens](brand/tokens.css)
 
 ## Students
