@@ -141,10 +141,17 @@ export function saveVenture(db: DB, input: VentureBundleInput): VentureBundle {
   const { venture: v } = input
   const t = now()
   db.transaction(() => {
-    const changed = db
-      .prepare('UPDATE ventures SET name = ?, pitch = ?, problem = ?, stage = ?, semester = ?, updated_at = ? WHERE id = ?')
-      .run(v.name, v.pitch, v.problem, v.stage, v.semester, t, v.id).changes
-    if (!changed) throw new Error('That venture no longer exists. Reload and try again.')
+    // Like every other write, only the open venture may change.
+    if (v.id !== activeVentureId(db)) throw new Error('That venture no longer exists. Reload and try again.')
+    db.prepare('UPDATE ventures SET name = ?, pitch = ?, problem = ?, stage = ?, semester = ?, updated_at = ? WHERE id = ?').run(
+      v.name,
+      v.pitch,
+      v.problem,
+      v.stage,
+      v.semester,
+      t,
+      v.id
+    )
 
     replaceChildren(db, 'venture_members', v.id, input.members, ['name', 'role'], t)
     replaceChildren(

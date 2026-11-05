@@ -1,5 +1,7 @@
 appId: edu.ku.catalyst.discoverycrm
 productName: Catalyst Discovery CRM
+copyright: Copyright © 2026 The Catalyst, KU School of Business
+artifactName: Catalyst-Discovery-CRM-${version}-${os}-${arch}.${ext}
 directories:
   output: release/${version}
   buildResources: build
@@ -10,17 +12,35 @@ files:
 npmRebuild: false
 asarUnpack:
   - node_modules/better-sqlite3/**
+# Electron fuses, flipped in the packaged binary. They close paths that let the app binary be used
+# as a plain Node runtime or load code from outside the signed app archive.
+electronFuses:
+  runAsNode: false
+  enableNodeOptionsEnvironmentVariable: false
+  enableNodeCliInspectArguments: false
+  enableEmbeddedAsarIntegrityValidation: true
+  onlyLoadAppFromAsar: true
+  enableCookieEncryption: true
 win:
   target: nsis
+  icon: build/icon.png
 nsis:
   oneClick: false
+  # Installs for the current user, so students don't need an admin password.
+  perMachine: false
   allowToChangeInstallationDirectory: true
+  createDesktopShortcut: true
+  createStartMenuShortcut: true
 mac:
   target:
     target: dmg
     arch: universal
   category: public.app-category.productivity
+  icon: build/icon.png
+  # Unsigned beta (ADR 0004): no hardened runtime until KU provides a Developer ID for notarization.
+  hardenedRuntime: false
 linux:
   target: AppImage
   category: Office
+  icon: build/icon.png
 publish: null

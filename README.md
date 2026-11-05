@@ -1,65 +1,50 @@
 # Catalyst Discovery CRM
 
-A downloadable desktop app for students in [The Catalyst](https://business.ku.edu/research-and-faculty/entrepreneurship/catalyst) (KU School of Business). Students log customer-discovery interviews, test venture hypotheses and decide whether an idea is viable. There is no login and no cloud: all data stays on the student's computer.
+A desktop app for students in [The Catalyst](https://business.ku.edu/research-and-faculty/entrepreneurship/catalyst) (KU School of Business). Students plan and log customer-discovery interviews, link what they hear to the hypotheses their venture depends on, and decide on evidence whether the idea is viable. There's no login and no cloud: all data stays on the student's computer.
 
-> **Status:** planning. There is no app code yet. To start building, open Claude Code in this folder and paste [docs/prompts/claude-code-kickoff.md](docs/prompts/claude-code-kickoff.md).
+> **Status:** 0.9 beta for the first cohort. Installers are not code-signed yet ([ADR 0004](docs/decisions/0004-unsigned-beta-on-public-releases.md)).
 
-## What's in this folder
+## For students
 
-| Path | What it is |
-| --- | --- |
-| `CLAUDE.md` | Rules Claude Code reads at the start of every session |
-| `.claude/settings.json` | Shared Claude Code settings (plugin marketplaces, secret-file deny list) |
-| `docs/` | Obsidian vault holding the specs, decisions, dev log and prompts |
-| `docs/product/prd.md` | Product requirements, the source of truth for features |
-| `docs/brand/brand-kit.md` | KU colors, fonts, voice and UI rules |
-| `docs/brand/tokens.css` | CSS variables the app imports |
-| `docs/tooling/plugins.md` | Which Claude Code plugins to use, when to use them, and which to skip |
-| `docs/decisions/` | Architecture decision records (ADRs) |
-| `docs/dev-log/` | One dated note per work session |
-| `.github/` | Pull request template (the CI release workflow is added in Phase 6) |
+**[Download the latest release](https://github.com/osanchezchristensen/catalyst-discovery-crm/releases/latest)**, then follow the **[install guide](docs/guides/install-guide.md)**. It shows what to click past the one-time Windows and Mac security warnings.
 
-## 1. Prerequisites (Windows)
+What's inside:
+- **Venture:** pitch, problem, customer segments with a beachhead, team.
+- **Contacts:** a Kanban from Identified to Closed, a table view, CSV import.
+- **Interviews:** structured notes that save automatically, pain and willingness-to-pay signals, attachments, interview guides.
+- **Hypotheses and evidence:** mark each interview as supporting or refuting each assumption; the app suggests a status.
+- **Insights:** highlight notes into tagged insights and see which pains come up most.
+- **Viability:** readiness checklist, charts, and a decision log (persevere, pivot, pause, stop).
+- **Home:** weekly interview goal, streak and follow-ups.
 
-- [Node.js](https://nodejs.org) 22 LTS (Taste Skill needs 22+; everything else works on 20+)
-- [Git](https://git-scm.com/download/win) and the [GitHub CLI](https://cli.github.com) (`winget install GitHub.cli`)
-- [Obsidian](https://obsidian.md)
-- Python 3.10+, only if you use Graphify later
-- Claude Code
+## For developers
 
-## 2. Put it on GitHub (one time)
+Requirements: [Node.js](https://nodejs.org) 24 and Git. Windows, macOS or Linux.
 
-Run these in PowerShell from this folder. The first three lines move two config files out of `setup/` and into their hidden folders.
-
-```powershell
-New-Item -ItemType Directory -Force .claude, .github | Out-Null
-Move-Item setup\claude-settings.json .claude\settings.json
-Move-Item setup\pull_request_template.md .github\pull_request_template.md
-Remove-Item setup -Recurse
-git init -b main
-git add .
-git commit -m "chore: scaffold project, PRD and brand kit"
-gh auth login
-gh repo create catalyst-discovery-crm --private --source . --remote origin --push
+```sh
+npm ci            # install exactly what's in package-lock.json
+npm run dev       # run the app with hot reload (uses a separate "(dev)" data folder)
+npm run typecheck && npm run lint && npm test
+npm run dist      # build an installer for this OS into release/<version>/
 ```
 
-If you don't use `gh`, create an empty private repo on github.com, then run `git remote add origin https://github.com/<you>/catalyst-discovery-crm.git` and `git push -u origin main`.
+- Electron + Vite + React + TypeScript, with Tailwind and shadcn/ui. SQLite (better-sqlite3) runs in the main process. The renderer is sandboxed and reaches it only through a typed, validated IPC API.
+- Product requirements: [docs/product/prd.md](docs/product/prd.md). Brand rules: [docs/brand/brand-kit.md](docs/brand/brand-kit.md). Decisions: [docs/decisions/](docs/decisions/). Session notes: [docs/dev-log/](docs/dev-log/).
+- `CLAUDE.md` holds the project rules for Claude Code sessions.
 
-**Branching:** use one branch per PRD phase (`phase-1-foundation`, `phase-2-discovery`, ...). Merge to `main` through a pull request; the template has the review checklist. Tag releases `v0.1.0`, `v0.2.0` and so on. In Phase 6, a GitHub Actions workflow will build installers from those tags.
+### Releasing
 
-## 3. Open the docs in Obsidian
+1. Bump `version` in `package.json` on a branch, merge it to `main`.
+2. Tag the merge commit and push the tag: `git tag v0.9.0 && git push origin v0.9.0`.
+3. The **Release** workflow builds Windows, macOS and Linux installers, runs the checks, and creates a **draft** GitHub Release.
+4. Try the installers, then publish the draft.
 
-1. In Obsidian, choose **Open folder as vault** and pick the `docs` folder, not the project root. That keeps `node_modules` out of the vault.
-2. Start at `home.md`.
-3. These settings are already configured:
-   - Links use standard Markdown, so they also work on GitHub and for Claude Code.
-   - New notes go to `inbox/`.
-   - **Daily note** creates today's dev-log entry.
-   - **Insert template** offers the ADR and dev-log templates.
-4. Commit notes together with the code. Per-device layout files are already git-ignored.
+Signing later: see [ADR 0004](docs/decisions/0004-unsigned-beta-on-public-releases.md).
 
-## 4. Build with Claude Code
+### Docs in Obsidian
 
-1. Install the recommended plugins listed in [docs/tooling/plugins.md](docs/tooling/plugins.md#install-now).
-2. Run `claude` in this folder and paste the kickoff prompt.
-3. Claude proposes a plan and waits for your approval, then builds one phase at a time, stopping for your review after each phase.
+`docs/` is an Obsidian vault. Open the `docs` folder (not the project root) as a vault and start at `home.md`. Links are standard Markdown, so they work on GitHub too.
+
+## Privacy
+
+The app makes no network calls and sends no analytics. Workspace exports leave out interviewee emails and phone numbers unless the student includes them. Confirm FERPA and data-handling expectations with KU IT before wider use.

@@ -6,6 +6,7 @@ import { backupNow, isBackupDue } from './backup'
 import { openDatabase } from './db/connection'
 import { createActions, registerIpc, type Ctx } from './ipc'
 import { buildMenu } from './menu'
+import { openFailureDetail, restrictDataFolder } from './startup'
 import { loadWindowState, MIN_HEIGHT, MIN_WIDTH, saveWindowState } from './window-state'
 
 const isDev = !app.isPackaged
@@ -28,12 +29,16 @@ const isSafeExternal = (url: string) => {
   }
 }
 
-// No navigation, no new windows, no webviews. https links open in the default browser.
+// No navigation (top level, frames or redirects), no new windows, no webviews. https links open in the default browser.
 app.on('web-contents-created', (_e, contents) => {
   contents.on('will-navigate', (event, url) => {
     event.preventDefault()
     if (isSafeExternal(url)) void shell.openExternal(url)
   })
+  contents.on('will-frame-navigate', (event) => {
+    if (!event.isMainFrame) event.preventDefault()
+  })
+  contents.on('will-redirect', (event) => event.preventDefault())
   contents.on('will-attach-webview', (event) => event.preventDefault())
   contents.setWindowOpenHandler(({ url }) => {
     if (isSafeExternal(url)) void shell.openExternal(url)
@@ -108,14 +113,21 @@ if (!app.requestSingleInstanceLock()) {
     session.defaultSession.setPermissionRequestHandler((_wc, _permission, callback) => callback(false))
     session.defaultSession.setPermissionCheckHandler(() => false)
 
+    restrictDataFolder(dataDir) // before the database, backups or attachments are written
     try {
       db = openDatabase(dataDir, backupsDir)
     } catch (err) {
-      dialog.showErrorBox(
-        'Catalyst Discovery CRM could not open your data',
-        `${err instanceof Error ? err.message : String(err)}\n\nYour data folder: ${dataDir}`
-      )
-      app.quit()
+      const choice = dialog.showMessageBoxSync({
+        type: 'error',
+        title: 'Catalyst Discovery CRM',
+        message: 'Catalyst Discovery CRM could not open your data',
+        detail: openFailureDetail(err, dataDir, backupsDir),
+        buttons: ['Open data folder', 'Quit'],
+        defaultId: 0,
+        cancelId: 1
+      })
+      if (choice === 0) void shell.openPath(dataDir).finally(() => app.quit())
+      else app.quit()
       return
     }
     const database = db

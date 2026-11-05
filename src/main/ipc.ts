@@ -255,8 +255,10 @@ export function createActions(ctx: Ctx): Actions {
 export function registerIpc(ctx: Ctx, actions: Actions): void {
   for (const [channel, handler] of Object.entries(actions)) {
     ipcMain.handle(channel, (event, arg: unknown) => {
-      // Only our own window may call the API.
-      if (event.sender !== ctx.getWindow()?.webContents) throw new Error('Blocked: unknown sender')
+      // Only our own window's main frame may call the API.
+      if (event.sender !== ctx.getWindow()?.webContents || event.senderFrame !== event.sender.mainFrame) {
+        throw new Error('Blocked: unknown sender')
+      }
       return handler(arg)
     })
   }

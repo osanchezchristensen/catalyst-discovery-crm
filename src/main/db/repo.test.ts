@@ -101,6 +101,16 @@ describe('venture', () => {
     ).toThrow(/no longer exists/)
   })
 
+  it('refuses to save a venture that is not the open one', () => {
+    const db = testDb()
+    const first = createVenture(db, base, 'Sam')
+    createVenture(db, { ...base, name: 'Second' }, 'Sam') // becomes the open venture
+    expect(() => saveVenture(db, { venture: { ...first.venture, name: 'Hijacked' }, members: [], segments: [] })).toThrow(
+      /no longer exists/
+    )
+    expect(db.prepare('SELECT name FROM ventures WHERE id = ?').pluck().get(first.venture.id)).toBe(base.name)
+  })
+
   it('allows only one beachhead segment', () => {
     const seg = { name: 'A', description: '', is_beachhead: true }
     const result = ventureBundleInput.safeParse({

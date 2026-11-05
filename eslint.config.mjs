@@ -14,6 +14,12 @@ export default defineConfig(
     languageOptions: { globals: globals.node }
   },
   {
+    // Build helpers run directly by Node or Electron as CommonJS.
+    files: ['scripts/**/*.cjs'],
+    languageOptions: { globals: globals.node, sourceType: 'commonjs' },
+    rules: { '@typescript-eslint/no-require-imports': 'off' }
+  },
+  {
     files: ['src/renderer/**/*.{ts,tsx}'],
     extends: [reactHooks.configs.flat.recommended, jsxA11y.flatConfigs.recommended],
     languageOptions: { globals: globals.browser }

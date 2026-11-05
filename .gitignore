@@ -36,3 +36,6 @@ graphify-out/
 
 # Claude Code local-only settings
 .claude/settings.local.json
+
+# Third-party skills without a redistribution license: install locally (see docs/tooling/plugins.md)
+.agents/skills/web-design-guidelines/

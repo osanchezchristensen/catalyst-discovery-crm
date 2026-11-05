@@ -6,6 +6,9 @@ An offline desktop app where Catalyst founders log customer interviews, test hyp
 - [Product requirements (PRD)](product/prd.md)
 - [Brand kit](brand/brand-kit.md) · [Design tokens](brand/tokens.css)
 
+## Students
+- [Install guide](guides/install-guide.md)
+
 ## Building
 - [Claude Code kickoff prompt](prompts/claude-code-kickoff.md)
 - [Plugins: what to use and when](tooling/plugins.md)

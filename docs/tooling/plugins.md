@@ -23,7 +23,7 @@ Use four of the nine plugins now (Agent Skills, Ponytail, Web Design Guidelines,
 - **Which "Agent Skills"?** This guide means [addyosmani/agent-skills](https://github.com/addyosmani/agent-skills). If you meant **vercel-labs/agent-skills**, that repo is where Web Design Guidelines lives, so installing its one skill (below) covers it.
 
 ## Install now
-Run these from the project folder (`npx` installs need Node 20+). The `npx skills add` commands put skills in `.claude/skills/`. Commit that folder so everyone gets the same skills.
+Run these from the project folder (`npx` installs need Node 20+). The `npx skills add` commands put skills in `.claude/skills/` or `.agents/skills/`. Commit a skill only when its license allows redistribution (security-audit ships its LICENSE). Web Design Guidelines has no license file, so it is git-ignored: each developer installs it locally with the command below.
 
 ```powershell
 # Web Design Guidelines (review only)
