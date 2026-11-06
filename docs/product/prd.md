@@ -144,7 +144,23 @@ All ids are UUIDs, so workspaces from different computers can merge on import. A
 3. **Phase 3 — Evidence:** hypotheses board and evidence linking (F5, F6).
 4. **Phase 4 — Viability:** dashboard, readiness checklist, decision log (F7, F8).
 5. **Phase 5 — dropped:** Guide and admin tools are out of scope ([ADR 0002](../decisions/0002-remove-guide-view.md)). CSV export moves to Phase 6.
-6. **Phase 6 — Polish and ship:** interview guide builder, insights grid, follow-ups and streaks, CSV export (with formula-injection guard), CSV import, attachments, app icon, installers, GitHub Actions release workflow, student install guide (F9, F10, F12, F14, F15).
+6. **Phase 6 — Polish and ship:** interview guide builder, insights grid, follow-ups and streaks, CSV export (with formula-injection guard), CSV import, attachments, app icon, installers, GitHub Actions release workflow, student install guide (F9, F10, F12, F14, F15). Shipped as v0.9.0.
+
+### Next versions
+Details, decisions and open questions for each item are in the [backlog](backlog.md) (item numbers in brackets).
+
+7. **Phase 7 — v0.10.0, interview basics:**
+   - Interview types: Informational, Validation, Sales. Readiness skips Informational. The migration sets existing interviews to Validation, and new interviews require a type (#3).
+   - "Written response" interview format (#4).
+   - Right-click menu with Cut, Copy, Paste and Select all, plus spell check on Windows and macOS. Spell check stays off on Linux, where it would download dictionaries (#1, #6).
+   - 25 MB limit per attachment (#15).
+8. **Phase 8 — v0.11.0, rich-text notes:** bold, underline and list toolbar on interview notes only. Notes are stored as HTML limited to those tags and cleaned on save and on import. Pastes keep only what the toolbar can make. Needs a new dependency, approved during planning, and a migration for existing notes (#5, #2).
+9. **Phase 9 — v0.12.0, patterns and sharing:**
+   - Patterns screen: referral chains, tag board and tag manager, compare by interview type (#11).
+   - Search everything with Ctrl+K (#7).
+   - Import survey answers from CSV as Written response interviews (#8).
+   - One-page summary PDF (#12).
+   - Trash with undo. Decide how workspace import treats deleted rows before planning (#14).
 
 ## Open questions
 - Will each founder run the app on their own laptop, or will the program run one shared copy on a program computer?

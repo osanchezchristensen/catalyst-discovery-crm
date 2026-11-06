@@ -2,6 +2,22 @@
 
 Ideas for the version after 0.9.0. Add new items at the bottom. When we plan the next version, move the chosen items into the [PRD](prd.md).
 
+## Planned
+The [PRD roadmap](prd.md#next-versions) assigns these items to releases. Their details stay below.
+
+| Release | Items |
+| --- | --- |
+| v0.10.0 (Phase 7) | 1, 3, 4, 6, and the 25 MB attachment limit from 15 |
+| v0.11.0 (Phase 8) | 2, 5 |
+| v0.12.0 (Phase 9) | 7, 8, 11, 12, 14 |
+| Not planned yet | 9, 10, 13 |
+
+Already shipped in v0.9.0, so not new work:
+- 15: attachments themselves. The PRD already says workspace export leaves them out, which answers its open question.
+- 13: Home already lists follow-ups and flags overdue ones.
+- 9: CSV contact import already skips duplicates by email.
+- 10: Ctrl+N, Ctrl+E and Ctrl+O already exist.
+
 ## Ideas
 
 1. **Right-click to copy and paste.**
@@ -70,4 +86,5 @@ Ideas for the version after 0.9.0. Add new items at the bottom. When we plan the
 
 15. **Attach files to interviews:** for example photos of whiteboard notes or survey screenshots, copied into the data folder.
     - Decision: 25 MB limit per file.
-    - Open question: whether workspace export includes attachments. Today's import refuses files over 50 MB, so two attachments could already exceed it.
+    - Answered: workspace export does not include attachments (PRD, "Data storage and privacy"), so the 50 MB import limit is not affected.
+    - Attachments shipped in v0.9.0 with no size limit. Only the limit is new work.
