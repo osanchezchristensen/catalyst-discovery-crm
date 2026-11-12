@@ -202,6 +202,22 @@ describe('import merge', () => {
     expect(listContacts(target).find((c) => c.name === 'Maya')?.referred_by).toBe(pat.id)
   })
 
+  it('keeps the local referrer when a newer file from before v7 updates the contact', () => {
+    const { db } = seeded()
+    const [pat] = listContacts(db)
+    const maya = saveContact(db, contactInput.parse({ ...pat, id: undefined, name: 'Maya', referred_by: pat.id }))
+    const target = testDb()
+    applyImport(target, roundTrip(exportWorkspace(db, opts)))
+    const old = JSON.parse(JSON.stringify(exportWorkspace(db, opts)))
+    for (const c of old.tables.contacts) delete c.referred_by
+    const row = old.tables.contacts.find((c: { id: string }) => c.id === maya.id)
+    row.role = 'Chef'
+    row.updated_at = new Date(Date.now() + 60_000).toISOString()
+    old.schema_version = 6
+    applyImport(target, roundTrip(old))
+    expect(listContacts(target).find((c) => c.id === maya.id)).toMatchObject({ role: 'Chef', referred_by: pat.id })
+  })
+
   it('imports contacts from a file exported before v7 with no referrer', () => {
     const { db } = seeded()
     const file = JSON.parse(JSON.stringify(exportWorkspace(db, opts)))

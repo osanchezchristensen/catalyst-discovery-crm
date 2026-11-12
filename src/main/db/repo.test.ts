@@ -43,7 +43,7 @@ import {
 import { testDb } from '../test-helpers'
 import { addDays, today, weekStart } from '../../shared/dates'
 import { DEFAULT_THRESHOLDS } from '../../shared/readiness'
-import { contactInput, decisionInput, guideInput, hypothesisInput, insightInput, interviewInput, taskInput, ventureBundleInput, weeklyGoalInput } from '../../shared/schema'
+import { contactInput, decisionInput, guideInput, hypothesisInput, insightInput, interviewInput, tagRenameInput, taskInput, ventureBundleInput, weeklyGoalInput } from '../../shared/schema'
 
 const base = { name: 'Campus Eats', pitch: '', problem: '', stage: 1, semester: 'Fall 2026' }
 
@@ -196,6 +196,10 @@ describe('tag manager', () => {
     expect(renameTag(db, { from: 'pricing', to: null })).toBe(2)
     expect(listInsights(db).flatMap((n) => n.tags)).toEqual(['speed'])
     expect(renameTag(db, { from: 'missing', to: 'x' })).toBe(0)
+    // Imported files can carry capitals: match the stored tag exactly, lowercase the new name.
+    db.prepare(`UPDATE insights SET tags = '["Speed"]' WHERE text = 'Slow'`).run()
+    expect(renameTag(db, tagRenameInput.parse({ from: 'Speed', to: 'Pace' }))).toBe(1)
+    expect(listInsights(db).flatMap((n) => n.tags)).toEqual(['pace'])
   })
 })
 

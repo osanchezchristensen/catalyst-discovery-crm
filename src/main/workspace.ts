@@ -135,7 +135,9 @@ export function applyImport(db: DB, file: WorkspaceFile): Counts {
             ? `${c} = CASE WHEN @${c} = '' THEN ${c} ELSE @${c} END`
             : untyped(c)
               ? `${c} = COALESCE(@${c}, ${c})`
-              : `${c} = @${c}`
+              : t === 'contacts' && c === 'referred_by' && file.schema_version < 7
+                ? `${c} = ${c}` // files before v7 can't know referrers; null there is "missing", not "removed"
+                : `${c} = @${c}`
         const update = db.prepare(`UPDATE ${t} SET ${cols.map(set).join(', ')} WHERE id = @id`)
         const classify = classifier(db, t)
         const c = { added: 0, updated: 0, unchanged: 0 }

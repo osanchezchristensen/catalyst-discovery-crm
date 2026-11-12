@@ -226,9 +226,11 @@ export const taskInput = workspaceTables.tasks
   .pick({ title: true, due_date: true, interview_id: true })
   .extend({ id: id.optional(), done: z.boolean() })
 
-const tagName = short.min(1).transform((t) => t.toLowerCase()) // tags are lowercase, like splitTags in the renderer
-/** Rename, merge (rename onto an existing tag) or delete (`to: null`) an insight tag across the venture. */
-export const tagRenameInput = z.object({ from: tagName, to: tagName.nullable() })
+/**
+ * Rename, merge (rename onto an existing tag) or delete (`to: null`) an insight tag across the venture.
+ * `from` matches the tag as stored (imports can carry capitals); the new name is lowercased like splitTags.
+ */
+export const tagRenameInput = z.object({ from: short.min(1), to: short.min(1).transform((t) => t.toLowerCase()).nullable() })
 export type TagRenameInput = z.input<typeof tagRenameInput>
 
 export const insightInput = workspaceTables.insights
