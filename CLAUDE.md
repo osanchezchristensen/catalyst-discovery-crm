@@ -17,7 +17,7 @@ An offline desktop CRM for customer discovery, built for students in KU's The Ca
 - The PRD wins over any plugin's defaults, including design skills and code-minimizing skills.
 
 ## Stack
-Electron, Vite, React, TypeScript, Tailwind, shadcn/ui (with its helpers radix-ui, class-variance-authority, clsx, tailwind-merge), Recharts, Lucide icons, zod (input validation).
+Electron, Vite, React, TypeScript, Tailwind, shadcn/ui (with its helpers radix-ui, class-variance-authority, clsx, tailwind-merge), Recharts, Lucide icons, zod (input validation), TipTap (interview notes editor only; exact versions, explicit extensions, see ADR 0006).
 - `better-sqlite3` runs in the main process. The renderer reaches it only through a typed preload IPC API.
 - Electron settings: `contextIsolation: true`, `nodeIntegration: false`, `sandbox: true`, and a strict CSP.
 - Use prepared statements only.

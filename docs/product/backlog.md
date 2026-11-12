@@ -31,7 +31,7 @@ Already shipped in v0.9.0, so not new work:
    - Today, right-clicking text does nothing: the app has no context menu.
    - Add Cut, Copy, Paste and Select all to every text field.
 
-2. **Clean up pasted interview notes.**
+2. **Clean up pasted interview notes.** Shipped in v0.11.0.
    - Notes are plain text today. Pasting from Word, Google Docs or a web page can bring in messy spacing and lose list structure.
    - Decision: notes use the rich text editor (item 5). A paste keeps only what the toolbar can make (bold, underline, numbered and bullet lists, paragraphs) and drops everything else: fonts, colors, images, tables and links.
 
@@ -47,7 +47,7 @@ Already shipped in v0.9.0, so not new work:
 4. **"Written response" interview format.** Shipped in v0.10.0. A format next to In person, Video and Phone, for surveys and email answers.
    - Small change: one new value in `INTERVIEW_FORMATS` (`src/shared/schema.ts`) and its label. The database doesn't restrict the column, so no migration is needed.
 
-5. **Formatting toolbar on interview notes only** (no other text box gets it): bold, underline, numbered list, bullet list.
+5. **Formatting toolbar on interview notes only.** Shipped in v0.11.0 ([ADR 0006](../decisions/0006-interview-notes-as-allowlisted-html.md)); CSV bullets are `•`, not `-`, because of the formula guard. No other text box gets it: bold, underline, numbered list, bullet list.
    - Decision: use a rich text editor (for example TipTap). It is a new dependency; pick and approve it when planning (CLAUDE.md).
    - Store notes as HTML limited to the toolbar's tags. Clean every note against that list on save and on workspace import, because a shared workspace file could carry hidden scripts.
    - Exports: CSV gets plain text, with lists as `-` or `1.` lines. Workspace export keeps the HTML.

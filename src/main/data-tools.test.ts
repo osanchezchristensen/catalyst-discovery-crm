@@ -30,7 +30,7 @@ const contact = (over: Record<string, unknown> = {}) =>
 const interview = () =>
   interviewInput.parse({
     contact_id: null, date: '2026-11-03', type: 'validation', format: 'video', interviewers: [], quotes: '', pain_score: 4, wtp_signal: '',
-    next_step: '', follow_up_date: null, notes: { behavior: 'Orders late', pains: '=cmd|calc', solutions: '', budget: '' }
+    next_step: '', follow_up_date: null, notes: { behavior: '<ul><li><p>Orders late</p></li><li><p>Eats cold</p></li></ul>', pains: '<p>=cmd|calc</p>', solutions: '', budget: '' }
   })
 
 function seeded() {
@@ -55,7 +55,8 @@ describe('CSV export', () => {
     const interviews = parseCsv(readFileSync(join(folder, 'interviews.csv'), 'utf8'))
     expect(interviews.headers).toEqual(expect.arrayContaining(['notes_behavior', 'notes_pains']))
     expect(interviews.headers).not.toContain('notes')
-    expect(interviews.rows[0][interviews.headers.indexOf('notes_pains')]).toBe("'=cmd|calc")
+    expect(interviews.rows[0][interviews.headers.indexOf('notes_pains')]).toBe("'=cmd|calc") // plain text, still guarded
+    expect(interviews.rows[0][interviews.headers.indexOf('notes_behavior')]).toBe('• Orders late\n• Eats cold')
     // A second export the same day goes to a new folder instead of overwriting.
     expect(exportCsv(db, dir, { includeContactDetails: true, date: '2026-11-03' })).toBe(join(dir, 'catalyst-export-2026-11-03-2'))
   })

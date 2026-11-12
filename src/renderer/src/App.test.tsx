@@ -1,10 +1,20 @@
 // @vitest-environment jsdom
-import { act, cleanup, fireEvent, render, screen } from '@testing-library/react'
+import { act, cleanup, fireEvent, render, screen, within } from '@testing-library/react'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 
 vi.hoisted(() => Object.defineProperty(window, 'api', { value: {}, configurable: true }))
 import App from './App'
+import type { Editor } from '@tiptap/react'
 import { hypothesis, installFakeApi } from './test-api'
+
+// jsdom has no layout; ProseMirror asks for caret rectangles when it scrolls the selection into view.
+const noRects = () => Object.assign([], { item: () => null }) as unknown as DOMRectList
+Range.prototype.getClientRects ??= noRects
+Range.prototype.getBoundingClientRect ??= () => new DOMRect()
+
+// TipTap puts its editor on the editable element; tests drive it directly because jsdom can't type into contenteditable.
+const editorOf = (el: HTMLElement) => (el as HTMLElement & { editor: Editor }).editor
+const write = (el: HTMLElement, html: string) => act(() => void editorOf(el).commands.setContent(html))
 
 afterEach(() => {
   cleanup()
@@ -25,18 +35,18 @@ describe('interview editor inside the app', () => {
   it('keeps typed text and autosaves it after 5 seconds (Phase 2 regression)', async () => {
     const api = installFakeApi()
     const pains = await openNewInterview()
-    fireEvent.change(pains, { target: { value: 'Food arrives cold' } })
+    await write(pains, '<p>Food arrives cold</p>')
     await act(() => vi.advanceTimersByTimeAsync(100))
-    expect(screen.getByLabelText('Pains')).toHaveProperty('value', 'Food arrives cold')
+    expect(screen.getByLabelText('Pains').textContent).toBe('Food arrives cold')
     await act(() => vi.advanceTimersByTimeAsync(5000))
     expect(api.saveInterview).toHaveBeenCalledTimes(1)
-    expect(api.saveInterview.mock.calls[0][0].notes.pains).toBe('Food arrives cold')
+    expect(api.saveInterview.mock.calls[0][0].notes.pains).toBe('<p>Food arrives cold</p>')
   })
 
   it('does not save a new interview until a type is chosen, and says why', async () => {
     const api = installFakeApi()
     const pains = await openNewInterview(null)
-    fireEvent.change(pains, { target: { value: 'Food arrives cold' } })
+    await write(pains, '<p>Food arrives cold</p>')
     await act(() => vi.advanceTimersByTimeAsync(5000))
     expect(api.saveInterview).not.toHaveBeenCalled()
     expect(await screen.findByText('Choose an interview type')).toBeTruthy()
@@ -49,18 +59,17 @@ describe('interview editor inside the app', () => {
     const api = installFakeApi({ hypotheses: [hypothesis] })
     const pains = await openNewInterview()
     fireEvent.click(await screen.findByRole('radio', { name: 'Refutes' }))
-    fireEvent.change(pains, { target: { value: 'They eat in the dining hall' } })
+    await write(pains, '<p>They eat in the dining hall</p>')
     await act(() => vi.advanceTimersByTimeAsync(5000))
     expect(api.saveInterview.mock.calls[0][0].evidence).toEqual([{ hypothesis_id: hypothesis.id, verdict: 'refutes', note: '' }])
   })
 
   it('saves highlighted note text as a tagged insight for this interview', async () => {
     const api = installFakeApi()
-    const pains = (await openNewInterview()) as HTMLTextAreaElement
-    fireEvent.change(pains, { target: { value: 'Food is always cold by midnight' } })
+    const pains = await openNewInterview()
+    await write(pains, '<p>Food is <strong>always</strong> cold by midnight</p>')
     await act(() => vi.advanceTimersByTimeAsync(5000)) // autosave creates the interview
-    pains.setSelectionRange(0, 19)
-    fireEvent.select(pains)
+    await act(() => void editorOf(pains).commands.setTextSelection({ from: 1, to: 20 })) // insights get the text, not the tags
     fireEvent.click(await screen.findByRole('button', { name: 'Save highlighted text as insight' }))
     expect(await screen.findByLabelText('Insight')).toHaveProperty('value', 'Food is always cold')
     fireEvent.change(screen.getByLabelText('Tags'), { target: { value: 'Cold, delivery, cold' } })
@@ -69,5 +78,42 @@ describe('interview editor inside the app', () => {
     expect(api.saveInsight).toHaveBeenCalledWith(
       expect.objectContaining({ text: 'Food is always cold', tags: ['cold', 'delivery'], interview_id: '00000000-0000-4000-8000-000000000001', is_quote: false })
     )
+  })
+
+  it('says which note is too long when autosave refuses it', async () => {
+    const api = installFakeApi()
+    const pains = await openNewInterview()
+    await write(pains, `<p>${'x'.repeat(50_001)}</p>`)
+    await act(() => vi.advanceTimersByTimeAsync(5000))
+    expect(api.saveInterview).not.toHaveBeenCalled()
+    expect(await screen.findByText(/This note is too long/)).toBeTruthy()
+    expect(screen.getByLabelText('Pains').getAttribute('aria-invalid')).toBe('true')
+  })
+
+  it('formats notes from the toolbar and keeps only toolbar formatting from a paste', async () => {
+    const api = installFakeApi()
+    const pains = await openNewInterview()
+    await write(pains, '<p>Cold food</p>')
+    await act(() => void editorOf(pains).commands.selectAll())
+    const toolbar = within(screen.getByRole('toolbar', { name: 'Pains formatting' }))
+    const bold = toolbar.getByRole('button', { name: 'Bold' })
+    fireEvent.click(bold)
+    expect(bold.getAttribute('aria-pressed')).toBe('true')
+    fireEvent.click(toolbar.getByRole('button', { name: 'Bullet list' }))
+    // What a paste from a web page or Word looks like once parsed: links, images, spans and tables must go.
+    await act(
+      () =>
+        void editorOf(pains)
+          .chain()
+          .focus('end')
+          .insertContent('<p><a href="https://x.com">See</a> <span style="color:red">red</span> <u>under</u> <img src="x.png"></p><table><tr><td>cell</td></tr></table>')
+          .run()
+    )
+    await act(() => vi.advanceTimersByTimeAsync(5000))
+    const saved = api.saveInterview.mock.calls[0][0].notes.pains
+    expect(saved).toContain('<ul><li><p><strong>Cold food</strong>')
+    expect(saved).toContain('<u>under</u>')
+    expect(saved).toContain('cell')
+    expect(saved).not.toMatch(/<(a|img|span|table|td)\b|style=|href=/)
   })
 })

@@ -1,10 +1,14 @@
 import type Database from 'better-sqlite3'
+import { plainToHtml } from '../../shared/notes'
 
 // Append-only. Never edit a shipped migration and never drop data people entered; add a new entry instead.
 // (v2 drops profiles.view_mode, a UI setting for the removed Guide view; see ADR 0002.)
 // Enums that may grow are checked in zod (src/shared/schema.ts), not with SQL CHECKs,
 // so adding a value never needs a table rebuild.
-export const migrations: string[] = [
+/** SQL, or a function for data changes SQL can't express. Each step runs in its own transaction. */
+export type Migration = string | ((db: Database.Database) => void)
+
+export const migrations: Migration[] = [
   /* v1: full PRD data model */ `
   CREATE TABLE meta (key TEXT PRIMARY KEY, value TEXT NOT NULL);
 
@@ -220,13 +224,33 @@ export const migrations: string[] = [
   `,
   /* v5: interview types (backlog #3). Existing interviews become Validation so readiness doesn't drop. No CHECK, like format: zod gates it. */ `
   ALTER TABLE interviews ADD COLUMN type TEXT NOT NULL DEFAULT 'validation';
-  `
+  `,
+  /* v6: interview notes become HTML (backlog #5, ADR 0006). Each plain-text note becomes one paragraph per line. */
+  (db) => {
+    const update = db.prepare('UPDATE interviews SET notes = ? WHERE id = ?')
+    for (const { id, notes } of db.prepare('SELECT id, notes FROM interviews').all() as { id: string; notes: string }[]) {
+      const converted = convertNotes(notes, plainToHtml)
+      if (converted !== notes) update.run(converted, id)
+    }
+  }
 ]
+
+/** Applies `fn` to every string field of an interview's notes JSON. Anything malformed is returned unchanged. */
+export function convertNotes(json: string, fn: (s: string) => string): string {
+  let o: unknown
+  try {
+    o = JSON.parse(json)
+  } catch {
+    return json
+  }
+  if (!o || typeof o !== 'object' || Array.isArray(o)) return json
+  return JSON.stringify(Object.fromEntries(Object.entries(o).map(([k, v]) => [k, typeof v === 'string' ? fn(v) : v])))
+}
 
 /** Runs pending migrations, each in its own transaction. `beforeMigrate` runs only for an existing database. */
 export function migrate(
   db: Database.Database,
-  list: string[] = migrations,
+  list: Migration[] = migrations,
   beforeMigrate?: (from: number, to: number) => void
 ): void {
   const from = db.pragma('user_version', { simple: true }) as number
@@ -238,7 +262,9 @@ export function migrate(
 
   for (let v = from; v < list.length; v++) {
     db.transaction(() => {
-      db.exec(list[v])
+      const step = list[v]
+      if (typeof step === 'string') db.exec(step)
+      else step(db)
       db.pragma(`user_version = ${v + 1}`)
       db.prepare(
         "INSERT INTO meta (key, value) VALUES ('schema_version', ?) ON CONFLICT(key) DO UPDATE SET value = excluded.value"

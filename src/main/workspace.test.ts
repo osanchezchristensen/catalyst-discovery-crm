@@ -170,6 +170,38 @@ describe('import merge', () => {
     expect(listInterviews(target)[0].type).toBe('validation')
   })
 
+  it('turns plain notes from files before v6 into paragraphs, and cleans HTML from newer files', () => {
+    const { db } = seeded()
+    saveInterview(db, interviewInput.parse({
+      contact_id: null, date: '2026-11-03', type: 'sales', format: 'video', interviewers: [], quotes: '', pain_score: null,
+      wtp_signal: '', next_step: '', follow_up_date: null, notes: { behavior: '', pains: '', solutions: '', budget: '' }
+    }))
+    const file = JSON.parse(JSON.stringify(exportWorkspace(db, opts)))
+    const legacy = structuredClone(file)
+    legacy.schema_version = 5
+    legacy.tables.interviews[0].notes = JSON.stringify({ behavior: 'a < b\nnext', pains: '', solutions: '', budget: '' })
+    const t1 = testDb()
+    applyImport(t1, roundTrip(legacy))
+    expect(listInterviews(t1)[0].notes.behavior).toBe('<p>a &lt; b</p><p>next</p>')
+
+    file.tables.interviews[0].notes = JSON.stringify({ behavior: '<p>ok<script>steal()</script></p><a href="x">l</a>', pains: '', solutions: '', budget: '' })
+    const t2 = testDb()
+    applyImport(t2, roundTrip(file))
+    expect(listInterviews(t2)[0].notes.behavior).toBe('<p>oksteal()</p>l')
+  })
+
+  it('round-trips an interview whose four notes are each near the size limit', () => {
+    const { db } = seeded()
+    const long = `<p>${'x'.repeat(45_000)}</p>`
+    saveInterview(db, interviewInput.parse({
+      contact_id: null, date: '2026-11-03', type: 'sales', format: 'video', interviewers: [], quotes: '', pain_score: null,
+      wtp_signal: '', next_step: '', follow_up_date: null, notes: { behavior: long, pains: long, solutions: long, budget: long }
+    }))
+    const target = testDb()
+    applyImport(target, roundTrip(exportWorkspace(db, opts)))
+    expect(listInterviews(target)[0].notes.budget).toBe(long)
+  })
+
   it('keeps the local interview type when a newer file from v0.9 updates the interview', () => {
     const { db } = seeded()
     saveInterview(db, interviewInput.parse({
