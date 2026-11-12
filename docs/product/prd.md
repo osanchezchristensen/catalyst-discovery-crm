@@ -144,7 +144,32 @@ All ids are UUIDs, so workspaces from different computers can merge on import. A
 3. **Phase 3 — Evidence:** hypotheses board and evidence linking (F5, F6).
 4. **Phase 4 — Viability:** dashboard, readiness checklist, decision log (F7, F8).
 5. **Phase 5 — dropped:** Guide and admin tools are out of scope ([ADR 0002](../decisions/0002-remove-guide-view.md)). CSV export moves to Phase 6.
-6. **Phase 6 — Polish and ship:** interview guide builder, insights grid, follow-ups and streaks, CSV export (with formula-injection guard), CSV import, attachments, app icon, installers, GitHub Actions release workflow, student install guide (F9, F10, F12, F14, F15).
+6. **Phase 6 — Polish and ship:** interview guide builder, insights grid, follow-ups and streaks, CSV export (with formula-injection guard), CSV import, attachments, app icon, installers, GitHub Actions release workflow, student install guide (F9, F10, F12, F14, F15). Shipped as v0.9.0.
+
+### Next versions
+Details, decisions and open questions for each item are in the [backlog](backlog.md) (item numbers in brackets).
+
+7. **Phase 7 — v0.10.0, interview basics:**
+   - Interview types: Informational, Validation, Sales. Readiness skips Informational. The migration sets existing interviews to Validation, and new interviews require a type (#3).
+   - "Written response" interview format (#4).
+   - Right-click menu with Cut, Copy, Paste and Select all, plus spell check on Windows and macOS. Spell check stays off on Linux, where it would download dictionaries (#1, #6).
+   - 25 MB limit per attachment (#15).
+8. **Phase 8 — v0.11.0, rich-text notes:** bold, underline and list toolbar on interview notes only. Notes are stored as HTML limited to those tags and cleaned on save and on import. Pastes keep only what the toolbar can make. Needs a new dependency, approved during planning, and a migration for existing notes (#5, #2).
+9. **Phase 9 — v0.12.0, patterns and sharing:**
+   - Patterns screen: referral chains, tag board and tag manager, compare by interview type (#11).
+   - Search everything with Ctrl+K (#7).
+   - Import survey answers from CSV as Written response interviews (#8).
+   - One-page summary PDF (#12).
+   - Trash with undo. Decide how workspace import treats deleted rows before planning (#14).
+10. **Phase 10 — v0.13.0, outreach history:** a dated timeline of outreach events on each contact (channel, reply, meeting set, declined, no reply), a Do not contact flag, and a "Waiting on a reply" list on Home (7 days by default, editable in Settings). Moving a card to Reached out records the event. Needs a migration (#16).
+11. **Phase 11 — v0.14.0, calendar (offline):** a meeting record when a contact moves to Scheduled, a Calendar screen (month, week and agenda views, keyboard navigation, built as a plain grid with no calendar library), `.ics` export per meeting and for all upcoming meetings, a scheduling-link field in Settings, and today's meetings on Home. Needs a migration (#17 step 1).
+12. **Phase 12 — v0.15.0, transcripts:** paste or load `.txt`, `.vtt` or `.srt` files, with an option to strip timestamps. Transcripts are stored in their own table, limited to 1 MB, and included in Search everything. Selected text can be saved as a quote or insight that links back to the transcript. There is a consent checkbox, and transcripts are left out of exports by default. Check FTS5 support before planning. Needs a migration (#22).
+13. **Phase 13 — v0.16.0, response scores:** optional likelihood-to-use and likelihood-to-recommend scores (0 to 10) on each interview. Charts over time (with decision markers), by audience, segment and contact, and recent versus earlier. They always show n, hold back trends on small samples, and are labeled as stated interest rather than commitments. Needs a migration (#20).
+14. **Phase 14 — v0.17.0, audience and goals:** an audience field on each contact (Peer, Customer or Expert, "Not set" until chosen), dashboard date ranges, goal targets with goal lines and on-pace markers, and filters that apply to every chart and are always shown. Count-type readiness thresholds read from matching goals. Needs a migration (#19).
+15. **Phase 15 — v0.18.0, charts everywhere:** contact funnel, interview timeline, evidence bars on hypotheses, readiness progress bars, a weekly trend on Home, and a one-page "everything" view that is also added to the summary PDF. Every chart has a "view as table" option. Recharts only. Split by screen during planning if it is too big for one session (#21).
+16. **Phase 16 — v0.19.0, AI agent connector (milestone, security audit):** a local MCP server that is off by default, with the read and write limits from [ADR 0005](../decisions/0005-ai-agent-access-through-local-mcp-server.md), a Suggested review queue, and a daily cap. Before planning: accept ADR 0005, confirm KU data rules for sending prospect data to an AI provider, and approve `@modelcontextprotocol/sdk`. Needs a migration (#18).
+
+Not scheduled: calendar sync with Microsoft 365 or Google (#17 step 2). It needs network access, an ADR, and answers on KU's Microsoft tenant and app-registration ownership.
 
 ## Open questions
 - Will each founder run the app on their own laptop, or will the program run one shared copy on a program computer?
