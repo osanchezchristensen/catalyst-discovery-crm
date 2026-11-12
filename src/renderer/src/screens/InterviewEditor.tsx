@@ -2,6 +2,7 @@ import { ArrowLeft, ExternalLink, FolderOpen, ListChecks, Paperclip, Plus, Quote
 import { useCallback, useEffect, useRef, useState, type SyntheticEvent } from 'react'
 import {
   INTERVIEW_FORMATS as FORMATS,
+  INTERVIEW_TYPES,
   VERDICTS,
   interviewInput,
   type Contact,
@@ -11,13 +12,24 @@ import {
   type Insight,
   type Hypothesis,
   type Interview,
-  type InterviewInput
+  type InterviewInput,
+  type InterviewType
 } from '../../../shared/schema'
 import { SelectField, TextAreaField, TextField } from '@/components/Field'
 import { InsightDialog } from '@/components/InsightDialog'
 import { Button } from '@/components/ui/button'
 import { Card, CardTitle } from '@/components/ui/card'
-import { FORMAT_LABELS, NOTE_FIELDS, TYPE_LABELS, VERDICT_LABELS, blankContact, blankInterview, fieldErrors } from '@/lib/discovery'
+import {
+  FORMAT_LABELS,
+  INTERVIEW_TYPE_LABELS,
+  NOTE_FIELDS,
+  TYPE_LABELS,
+  VERDICT_LABELS,
+  blankContact,
+  blankInterview,
+  fieldErrors,
+  type InterviewDraft
+} from '@/lib/discovery'
 import { formatDateTime } from '@/lib/utils'
 
 const AUTOSAVE_MS = 5000
@@ -25,9 +37,10 @@ const AUTOSAVE_MS = 5000
 const fileSize = (bytes: number) =>
   bytes < 1024 * 1024 ? `${Math.max(1, Math.round(bytes / 1024))} KB` : `${(bytes / (1024 * 1024)).toFixed(1)} MB`
 
-const fromInterview = (i: Interview): InterviewInput => ({
+const fromInterview = (i: Interview): InterviewDraft => ({
   contact_id: i.contact_id,
   date: i.date,
+  type: i.type,
   format: i.format,
   interviewers: i.interviewers,
   notes: i.notes,
@@ -40,7 +53,7 @@ const fromInterview = (i: Interview): InterviewInput => ({
 })
 
 /** Worth saving once it has a date and either a contact or some notes. */
-const ready = (d: InterviewInput) =>
+const ready = (d: InterviewDraft) =>
   !!d.date && (!!d.contact_id || !!d.quotes.trim() || Object.values(d.notes).some((n) => n.trim()))
 
 /** Create or edit one interview. Autosaves every 5 seconds while there are unsaved changes. */
@@ -59,7 +72,7 @@ export function InterviewEditor({
   onNotify: (message: string) => void
   onError: (err: unknown) => void
 }) {
-  const [draft, setDraft] = useState<InterviewInput | null>(initialId ? null : blankInterview)
+  const [draft, setDraft] = useState<InterviewDraft | null>(initialId ? null : blankInterview)
   const [saved, setSaved] = useState(() => (initialId ? '' : JSON.stringify(blankInterview())))
   const [id, setId] = useState(initialId)
   const [contacts, setContacts] = useState<Contact[]>([])
@@ -124,7 +137,7 @@ export function InterviewEditor({
       saving.current = true
       setStatus('Saving…')
       try {
-        const result = await window.api.saveInterview({ ...d, id: currentId ?? undefined })
+        const result = await window.api.saveInterview({ ...d, type: parsed.data.type, id: currentId ?? undefined })
         setId(result.id)
         setSaved(snapshot)
         setErrors({})
@@ -183,7 +196,7 @@ export function InterviewEditor({
   }
   // Names on the interview stay visible even if a teammate was renamed or removed.
   const people = [...new Set([...team, ...draft.interviewers])]
-  const set = (patch: Partial<InterviewInput>) => setDraft({ ...draft, ...patch })
+  const set = (patch: Partial<InterviewDraft>) => setDraft({ ...draft, ...patch })
   const setNote = (key: keyof InterviewInput['notes'], value: string) => set({ notes: { ...draft.notes, [key]: value } })
   const evidence = draft.evidence ?? []
   const linkOf = (hypothesisId: string) => evidence.find((e) => e.hypothesis_id === hypothesisId)
@@ -238,7 +251,7 @@ export function InterviewEditor({
 
       <Card>
         <CardTitle>Who and when</CardTitle>
-        <div className="mt-4 grid grid-cols-[10rem_1fr_10rem] gap-4">
+        <div className="mt-4 grid grid-cols-[10rem_1fr_10rem_10rem] gap-4">
           <TextField
             label="Date"
             type="date"
@@ -259,6 +272,23 @@ export function InterviewEditor({
               </option>
             ))}
           </SelectField>
+          <SelectField
+            label="Type"
+            value={draft.type}
+            onChange={(e) => set({ type: e.target.value as InterviewType })}
+            error={errors.type}
+            hint={draft.type ? INTERVIEW_TYPE_LABELS[draft.type].hint : undefined}
+            required
+          >
+            <option value="" disabled>
+              Choose a type…
+            </option>
+            {INTERVIEW_TYPES.map((t) => (
+              <option key={t} value={t}>
+                {INTERVIEW_TYPE_LABELS[t].label}
+              </option>
+            ))}
+          </SelectField>
           <SelectField label="Format" value={draft.format} onChange={(e) => set({ format: e.target.value as InterviewInput['format'] })}>
             {FORMATS.map((f) => (
               <option key={f} value={f}>
@@ -266,7 +296,7 @@ export function InterviewEditor({
               </option>
             ))}
           </SelectField>
-          <div className="col-span-2 col-start-2 flex items-start gap-2">
+          <div className="col-span-3 col-start-2 flex items-start gap-2">
             <div className="flex-1">
               <TextField
                 label="New contact"
@@ -461,7 +491,7 @@ export function InterviewEditor({
       <Card>
         <CardTitle>Attachments</CardTitle>
         <p className="mt-1 text-[13px] text-muted-foreground">
-          Whiteboard photos or a recording the person agreed to. Photos, audio, video or PDF, up to 100 MB. Copies stay on
+          Whiteboard photos, survey screenshots or a short clip the person agreed to. Photos, audio, video or PDF, up to 25 MB. Copies stay on
           this computer.
         </p>
         {attachments.length > 0 && (

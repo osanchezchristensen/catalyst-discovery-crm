@@ -45,7 +45,7 @@ export function installFakeApi(opts: { hypotheses?: Hypothesis[] } = {}) {
     saveInterview: vi.fn(async (input: InterviewInput): Promise<Interview> => {
       const row: Interview = {
         id: input.id ?? `00000000-0000-4000-8000-${String(saved.length + 1).padStart(12, '0')}`, venture_id: 'v1', contact_id: input.contact_id, date: input.date,
-        format: input.format, interviewers: input.interviewers, notes: input.notes, quotes: input.quotes ?? '',
+        type: input.type, format: input.format, interviewers: input.interviewers, notes: input.notes, quotes: input.quotes ?? '',
         pain_score: input.pain_score ?? null, wtp_signal: input.wtp_signal ?? '', next_step: input.next_step ?? '',
         follow_up_date: input.follow_up_date ?? null, created_at: T, updated_at: T, contact_name: null,
         evidence: input.evidence ?? []

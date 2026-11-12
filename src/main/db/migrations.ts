@@ -217,6 +217,9 @@ export const migrations: string[] = [
     updated_at TEXT NOT NULL
   );
   CREATE INDEX idx_guides_venture ON guides(venture_id);
+  `,
+  /* v5: interview types (backlog #3). Existing interviews become Validation so readiness doesn't drop. No CHECK, like format: zod gates it. */ `
+  ALTER TABLE interviews ADD COLUMN type TEXT NOT NULL DEFAULT 'validation';
   `
 ]
 

@@ -72,7 +72,7 @@ describe('import merge', () => {
     const [pat] = listContacts(db)
     const h = saveHypothesis(db, hypothesisInput.parse({ type: 'problem', statement: 'Food arrives cold', risk: 'high', status: 'testing', success_criteria: '' }))
     saveInterview(db, interviewInput.parse({
-      contact_id: pat.id, date: '2026-11-03', format: 'phone', interviewers: ['Sam'], quotes: 'Too slow', pain_score: 5,
+      contact_id: pat.id, date: '2026-11-03', type: 'sales', format: 'phone', interviewers: ['Sam'], quotes: 'Too slow', pain_score: 5,
       wtp_signal: 'Would pilot', next_step: '', follow_up_date: '2026-11-10',
       notes: { behavior: 'a', pains: 'b', solutions: 'c', budget: 'd' },
       evidence: [{ hypothesis_id: h.id, verdict: 'supports', note: 'Said it twice' }]
@@ -154,6 +154,20 @@ describe('import merge', () => {
     const target = testDb()
     applyImport(target, roundTrip(file))
     expect(getActiveVenture(target)?.venture.weekly_goal).toBe(3)
+  })
+
+  it('imports interviews from a file exported before v5 as Validation', () => {
+    const { db } = seeded()
+    saveInterview(db, interviewInput.parse({
+      contact_id: null, date: '2026-11-03', type: 'sales', format: 'video', interviewers: [], quotes: '', pain_score: null,
+      wtp_signal: '', next_step: '', follow_up_date: null, notes: { behavior: '', pains: '', solutions: '', budget: '' }
+    }))
+    const file = JSON.parse(JSON.stringify(exportWorkspace(db, opts)))
+    for (const i of file.tables.interviews) delete i.type
+    file.schema_version = 4
+    const target = testDb()
+    applyImport(target, roundTrip(file))
+    expect(listInterviews(target)[0].type).toBe('validation')
   })
 
   it('rolls back everything when a row points at a missing parent', () => {

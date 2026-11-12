@@ -4,7 +4,7 @@ import type { Guide, Interview } from '../../../shared/schema'
 import { GuideEditor } from '@/components/GuideEditor'
 import { Button } from '@/components/ui/button'
 import { Card } from '@/components/ui/card'
-import { FORMAT_LABELS, formatDate } from '@/lib/discovery'
+import { FORMAT_LABELS, INTERVIEW_TYPE_LABELS, formatDate } from '@/lib/discovery'
 import { cn } from '@/lib/utils'
 
 type Tab = 'interviews' | 'guides'
@@ -161,6 +161,7 @@ function InterviewList({ onOpen, onError }: { onOpen: (id: string | null) => voi
             <tr>
               <th scope="col" className="px-3 py-2">Date</th>
               <th scope="col" className="px-3 py-2">Contact</th>
+              <th scope="col" className="px-3 py-2">Type</th>
               <th scope="col" className="px-3 py-2">Format</th>
               <th scope="col" className="px-3 py-2 text-right">Pain (1–5)</th>
               <th scope="col" className="px-3 py-2">Next step</th>
@@ -179,6 +180,7 @@ function InterviewList({ onOpen, onError }: { onOpen: (id: string | null) => voi
                   </button>
                 </th>
                 <td className="max-w-56 truncate px-3 py-2">{i.contact_name ?? 'No contact'}</td>
+                <td className="px-3 py-2">{INTERVIEW_TYPE_LABELS[i.type].label}</td>
                 <td className="px-3 py-2">{FORMAT_LABELS[i.format]}</td>
                 <td className="tabular px-3 py-2 text-right">{i.pain_score ?? 'Not rated'}</td>
                 <td className="max-w-72 truncate px-3 py-2">{i.next_step}</td>

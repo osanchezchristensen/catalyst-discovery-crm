@@ -29,7 +29,7 @@ const contact = (over: Record<string, unknown> = {}) =>
   })
 const interview = () =>
   interviewInput.parse({
-    contact_id: null, date: '2026-11-03', format: 'video', interviewers: [], quotes: '', pain_score: 4, wtp_signal: '',
+    contact_id: null, date: '2026-11-03', type: 'validation', format: 'video', interviewers: [], quotes: '', pain_score: 4, wtp_signal: '',
     next_step: '', follow_up_date: null, notes: { behavior: 'Orders late', pains: '=cmd|calc', solutions: '', budget: '' }
   })
 
@@ -119,7 +119,7 @@ describe('attachments', () => {
     const big = join(tmp(), 'huge.mp4')
     writeFileSync(big, '')
     truncateSync(big, MAX_ATTACHMENT_BYTES + 1) // sparse, so the test stays fast
-    await expect(addAttachment(db, join(tmp(), 'a'), i.id, big)).rejects.toThrow(/100 MB/)
+    await expect(addAttachment(db, join(tmp(), 'a'), i.id, big)).rejects.toThrow(/25 MB/)
   })
 
   it('refuses to open a stored path that points outside the attachments folder', async () => {

@@ -50,6 +50,7 @@ export function Viability({ onNotify, onError }: { onNotify: (message: string) =
         <p className="tabular mt-1 font-semibold">
           {ready} of {data.readiness.length} ready
         </p>
+        <p className="text-[13px] text-muted-foreground">Informational interviews aren’t counted.</p>
         <ul className="mt-4 flex flex-col gap-3">
           {data.readiness.map((r) => (
             <li key={r.key} className="flex items-start gap-3">

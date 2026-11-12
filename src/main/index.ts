@@ -5,6 +5,7 @@ import { EVENT_CHANNEL, type AppEvent } from '../shared/api'
 import { backupNow, isBackupDue } from './backup'
 import { openDatabase } from './db/connection'
 import { createActions, registerIpc, type Ctx } from './ipc'
+import { contextMenuTemplate } from './context-menu'
 import { buildMenu } from './menu'
 import { openFailureDetail, restrictDataFolder } from './startup'
 import { loadWindowState, MIN_HEIGHT, MIN_WIDTH, saveWindowState } from './window-state'
@@ -39,6 +40,10 @@ app.on('web-contents-created', (_e, contents) => {
     if (!event.isMainFrame) event.preventDefault()
   })
   contents.on('will-redirect', (event) => event.preventDefault())
+  contents.on('context-menu', (_event, params) => {
+    const items = contextMenuTemplate(params, contents)
+    if (items.length) Menu.buildFromTemplate(items).popup()
+  })
   contents.on('will-attach-webview', (event) => event.preventDefault())
   contents.setWindowOpenHandler(({ url }) => {
     if (isSafeExternal(url)) void shell.openExternal(url)
@@ -65,7 +70,8 @@ function createWindow(): BrowserWindow {
       nodeIntegration: false,
       sandbox: true,
       webSecurity: true,
-      spellcheck: false // Chromium downloads spellcheck dictionaries over the network
+      // Windows and macOS use the system spell checker. On Linux, Chromium would download dictionaries over the network.
+      spellcheck: process.platform !== 'linux'
     }
   })
   w.once('ready-to-show', () => {

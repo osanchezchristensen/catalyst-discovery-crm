@@ -29,7 +29,8 @@ export const MEMBER_ROLES = ['owner', 'member'] as const
 export const VENTURE_STATUSES = ['active', 'paused', 'stopped'] as const
 export const CONTACT_SOURCES = ['warm_intro', 'linkedin', 'event', 'cold'] as const
 export const CONTACT_STAGES = ['identified', 'reached_out', 'scheduled', 'interviewed', 'follow_up', 'closed'] as const
-export const INTERVIEW_FORMATS = ['in_person', 'video', 'phone'] as const
+export const INTERVIEW_FORMATS = ['in_person', 'video', 'phone', 'written'] as const
+export const INTERVIEW_TYPES = ['informational', 'validation', 'sales'] as const
 export const HYPOTHESIS_TYPES = ['customer', 'problem', 'solution', 'channel', 'revenue', 'feasibility'] as const
 export const RISKS = ['low', 'medium', 'high'] as const
 export const HYPOTHESIS_STATUSES = ['untested', 'testing', 'validated', 'invalidated', 'mixed'] as const
@@ -65,7 +66,9 @@ export const workspaceTables = {
     tags: jsonText, consent_followup: bool, notes: long, ...stamps
   }),
   interviews: z.object({
-    id, venture_id: id, contact_id: id.nullable(), date, format: z.enum(INTERVIEW_FORMATS), interviewers: jsonText,
+    id, venture_id: id, contact_id: id.nullable(), date,
+    // Files exported before migration v5 have no type; the migration made existing interviews Validation too.
+    type: z.enum(INTERVIEW_TYPES).default('validation'), format: z.enum(INTERVIEW_FORMATS), interviewers: jsonText,
     notes: jsonText, quotes: long, pain_score: z.int().min(1).max(5).nullable(), wtp_signal: short,
     next_step: long, follow_up_date: date.nullable(), ...stamps
   }),
@@ -156,6 +159,7 @@ export const interviewInput = workspaceTables.interviews
   .pick({ contact_id: true, date: true, format: true, quotes: true, pain_score: true, wtp_signal: true, next_step: true, follow_up_date: true })
   .extend({
     id: id.optional(),
+    type: z.enum(INTERVIEW_TYPES, 'Choose an interview type'), // required for new interviews, unlike imports
     interviewers: z.array(short.min(1)).max(20),
     notes: interviewNotes,
     evidence: z
@@ -254,6 +258,7 @@ type ContactRow = z.infer<(typeof workspaceTables)['contacts']>
 /** A contact as the app uses it: JSON and 0/1 columns decoded. */
 export type Contact = Omit<ContactRow, 'tags' | 'consent_followup'> & { tags: string[]; consent_followup: boolean }
 
+export type InterviewType = (typeof INTERVIEW_TYPES)[number]
 export type InterviewNotes = z.infer<typeof interviewNotes>
 export type InterviewInput = z.input<typeof interviewInput>
 type InterviewRow = z.infer<(typeof workspaceTables)['interviews']>

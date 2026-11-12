@@ -1,6 +1,6 @@
 import { today } from '../../../shared/dates'
 import type { HypothesisStatus, Tally } from '../../../shared/evidence'
-import type { ContactInput, ContactStage, DecisionKind, HypothesisType, InterviewInput } from '../../../shared/schema'
+import type { ContactInput, ContactStage, DecisionKind, HypothesisType, InterviewInput, InterviewType } from '../../../shared/schema'
 import type { CONTACT_SOURCES, INTERVIEW_FORMATS, RISKS, VERDICTS } from '../../../shared/schema'
 
 export const STAGE_LABELS: Record<ContactStage, string> = {
@@ -22,8 +22,18 @@ export const SOURCE_LABELS: Record<(typeof CONTACT_SOURCES)[number], string> = {
 export const FORMAT_LABELS: Record<(typeof INTERVIEW_FORMATS)[number], string> = {
   in_person: 'In person',
   video: 'Video',
-  phone: 'Phone'
+  phone: 'Phone',
+  written: 'Written response'
 }
+
+export const INTERVIEW_TYPE_LABELS: Record<InterviewType, { label: string; hint: string }> = {
+  informational: { label: 'Informational', hint: 'Researching the problem. Not counted toward readiness.' },
+  validation: { label: 'Validation', hint: 'Finding out whether they would buy it.' },
+  sales: { label: 'Sales', hint: 'Trying to sell to them.' }
+}
+
+/** An interview being edited: the type starts blank because new interviews must pick one. */
+export type InterviewDraft = Omit<InterviewInput, 'type'> & { type: InterviewType | '' }
 
 export const NOTE_FIELDS = [
   { key: 'behavior', label: 'Current behavior', hint: 'What do they do today? Ask about the last time it happened.' },
@@ -54,9 +64,10 @@ export const blankContact = (name: string, segment_id: string | null = null): Co
   notes: ''
 })
 
-export const blankInterview = (): InterviewInput => ({
+export const blankInterview = (): InterviewDraft => ({
   contact_id: null,
   date: today(),
+  type: '',
   format: 'video',
   interviewers: [],
   notes: { behavior: '', pains: '', solutions: '', budget: '' },
