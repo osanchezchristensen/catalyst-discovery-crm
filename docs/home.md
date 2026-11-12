@@ -9,6 +9,7 @@ An offline desktop app where Catalyst founders log customer interviews, test hyp
 
 ## Students
 - [Install guide](guides/install-guide.md)
+- [Agent playbook: finding people to interview](guides/agent-playbook.md)
 
 ## Building
 - [Claude Code kickoff prompt](prompts/claude-code-kickoff.md)
