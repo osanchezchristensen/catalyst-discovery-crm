@@ -4,6 +4,7 @@ import type {
   ContactField,
   ContactImportRequest,
   Thresholds,
+  TagRenameInput,
   Contact,
   ContactInput,
   ContactStage,
@@ -94,6 +95,8 @@ export interface InvokeApi {
   listInsights(): Promise<Insight[]>
   saveInsight(input: InsightInput): Promise<Insight>
   deleteInsight(id: string): Promise<void>
+  /** Rename, merge or delete (`to: null`) a tag on every insight; returns how many changed. */
+  renameTag(input: TagRenameInput): Promise<number>
   listGuides(): Promise<Guide[]>
   saveGuide(input: GuideInput): Promise<Guide>
   deleteGuide(id: string): Promise<void>
@@ -150,6 +153,7 @@ export const INVOKE_CHANNELS = [
   'listInsights',
   'saveInsight',
   'deleteInsight',
+  'renameTag',
   'listGuides',
   'saveGuide',
   'deleteGuide',

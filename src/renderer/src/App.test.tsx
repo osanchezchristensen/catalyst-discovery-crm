@@ -5,7 +5,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest'
 vi.hoisted(() => Object.defineProperty(window, 'api', { value: {}, configurable: true }))
 import App from './App'
 import type { Editor } from '@tiptap/react'
-import { hypothesis, installFakeApi } from './test-api'
+import { contact, hypothesis, insight, installFakeApi } from './test-api'
 
 // jsdom has no layout; ProseMirror asks for caret rectangles when it scrolls the selection into view.
 const noRects = () => Object.assign([], { item: () => null }) as unknown as DOMRectList
@@ -115,5 +115,31 @@ describe('interview editor inside the app', () => {
     expect(saved).toContain('<u>under</u>')
     expect(saved).toContain('cell')
     expect(saved).not.toMatch(/<(a|img|span|table|td)\b|style=|href=/)
+  })
+})
+
+describe('referrals and tags', () => {
+  it('adds someone the interviewee suggested as a contact referred by them', async () => {
+    const pat = contact('00000000-0000-4000-8000-0000000000aa', 'Pat')
+    const api = installFakeApi({ contacts: [pat] })
+    await openNewInterview()
+    fireEvent.change(await screen.findByLabelText('Contact'), { target: { value: pat.id } })
+    fireEvent.change(await screen.findByLabelText('Who did they suggest?'), { target: { value: 'Maya' } })
+    fireEvent.click(screen.getByRole('button', { name: 'Add referral' }))
+    await act(() => vi.advanceTimersByTimeAsync(50))
+    expect(api.saveContact).toHaveBeenCalledWith(expect.objectContaining({ name: 'Maya', referred_by: pat.id, stage: 'identified' }))
+    expect(await screen.findByText('Added Maya, referred by Pat.')).toBeTruthy()
+  })
+
+  it('merges one insight tag into another from the tag manager', async () => {
+    const api = installFakeApi({ insights: [insight('n1', 'Too pricey', ['price']), insight('n2', 'Pricing page', ['pricing'])] })
+    render(<App />)
+    fireEvent.click(await screen.findByRole('button', { name: 'Insights' }))
+    fireEvent.click(await screen.findByRole('button', { name: 'Manage tags' }))
+    fireEvent.change(screen.getByLabelText(/Rename “price”/), { target: { value: 'Pricing' } })
+    expect(screen.getByText('Merges into the existing tag “pricing”.')).toBeTruthy()
+    fireEvent.click(screen.getByRole('button', { name: 'Merge' }))
+    await act(async () => {})
+    expect(api.renameTag).toHaveBeenCalledWith({ from: 'price', to: 'pricing' })
   })
 })

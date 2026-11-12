@@ -1,6 +1,6 @@
 // An in-memory stand-in for window.api, for screen tests only.
 import { vi } from 'vitest'
-import type { Hypothesis, Insight, InsightInput, Interview, InterviewInput, VentureBundle } from '../../shared/schema'
+import type { Contact, ContactInput, Hypothesis, Insight, InsightInput, Interview, InterviewInput, VentureBundle } from '../../shared/schema'
 
 const T = '2026-11-03T12:00:00.000Z'
 
@@ -24,19 +24,30 @@ export const hypothesis: Hypothesis = {
  * App.tsx reads window.api when its module loads, so tests create the object first (vi.hoisted)
  * and this function replaces its methods in place.
  */
-export function installFakeApi(opts: { hypotheses?: Hypothesis[] } = {}) {
+export const contact = (id: string, name: string): Contact => ({
+  id, venture_id: 'v1', segment_id: null, name, email: '', phone: '', role: '', organization: '', source: null, stage: 'identified',
+  tags: [], consent_followup: false, notes: '', referred_by: null, created_at: T, updated_at: T
+})
+
+export const insight = (id: string, text: string, tags: string[]): Insight => ({
+  id, interview_id: null, text, tags, is_quote: false, date: null, contact_name: null, created_at: T
+})
+
+export function installFakeApi(opts: { hypotheses?: Hypothesis[]; contacts?: Contact[]; insights?: Insight[] } = {}) {
   const saved: Interview[] = []
   const api = {
     getProfile: vi.fn(async () => ({ id: 'p1', full_name: 'Sam', email: null, stage: 1, created_at: T, updated_at: T })),
     getActiveVenture: vi.fn(async () => ventureBundle),
     getAppInfo: vi.fn(async () => ({ version: '0.0.0', dataDir: '/tmp', lastBackupAt: null })),
     onEvent: vi.fn(() => () => {}),
-    listContacts: vi.fn(async () => []),
+    listContacts: vi.fn(async () => opts.contacts ?? []),
+    saveContact: vi.fn(async (input: ContactInput): Promise<Contact> => ({ ...contact(`c-${input.name}`, input.name), referred_by: input.referred_by ?? null })),
+    renameTag: vi.fn(async () => 1),
     listInterviews: vi.fn(async () => saved),
     listHypotheses: vi.fn(async () => opts.hypotheses ?? []),
     getHome: vi.fn(async () => ({ goal: 3, thisWeek: 0, streak: 0, tasks: [] })),
     listGuides: vi.fn(async () => []),
-    listInsights: vi.fn(async () => []),
+    listInsights: vi.fn(async () => opts.insights ?? []),
     saveInsight: vi.fn(async (input: InsightInput): Promise<Insight> => ({
       id: 'n1', interview_id: input.interview_id ?? null, text: input.text, tags: input.tags, is_quote: input.is_quote,
       date: null, contact_name: null, created_at: T

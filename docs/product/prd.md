@@ -81,7 +81,7 @@ These thresholds are defaults that can be edited per cohort. Confirm them with p
 | venture_members | venture_id, name, role (owner, member) | team names on a venture |
 | guides | id, venture_id, name, questions (JSON) | interview guides (F9), ADR 0003 |
 | segments | id, venture_id, name, description, is_beachhead | used by contacts and interviews |
-| contacts | id, venture_id, segment_id, name, email, phone, role, organization, source, stage, tags, consent_followup, notes | has interviews |
+| contacts | id, venture_id, segment_id, name, email, phone, role, organization, source, stage, tags, consent_followup, notes, referred_by (contact) | has interviews; referral chains |
 | interviews | id, venture_id, contact_id, date, type, format, interviewers, notes (JSON of allowlisted HTML, [ADR 0006](../decisions/0006-interview-notes-as-allowlisted-html.md)), quotes, pain_score, wtp_signal, next_step, follow_up_date | links to hypotheses and insights |
 | hypotheses | id, venture_id, version, type, statement, risk, status, success_criteria | linked through evidence |
 | evidence | id, hypothesis_id, interview_id, verdict (supports, refutes, neutral), note | joins interviews to hypotheses |
@@ -116,6 +116,8 @@ All ids are UUIDs, so workspaces from different computers can merge on import. A
 | Contacts | Founder | Kanban by stage with a table toggle, filters by segment and tag, quick add |
 | Interview detail | Founder | Structured notes form, quotes, pain score, hypothesis evidence panel, insights |
 | Hypotheses | Founder | Cards grouped by type with status chip, risk and evidence tally; drill into linked interviews |
+| Insights | Founder | Tag board (one column per tag), tag manager to rename, merge and delete tags |
+| Patterns | Founder | Referral chains; Validation vs Sales comparison of pain, buying signals and quotes |
 | Viability dashboard | Founder | Charts, scorecard, readiness checklist, decision log |
 | Settings | All | Profile, cohort thresholds, export and import, backups, open data folder, reset workspace |
 
@@ -155,12 +157,10 @@ Details, decisions and open questions for each item are in the [backlog](backlog
    - Right-click menu with Cut, Copy, Paste and Select all, plus spell check on Windows and macOS. Spell check stays off on Linux, where it would download dictionaries (#1, #6).
    - 25 MB limit per attachment (#15).
 8. **Phase 8 — v0.11.0, rich-text notes:** bold, underline and list toolbar on interview notes only. Notes are stored as HTML limited to those tags and cleaned on save and on import. Pastes keep only what the toolbar can make. Needs a new dependency, approved during planning, and a migration for existing notes (#5, #2).
-9. **Phase 9 — v0.12.0, patterns and sharing:**
-   - Patterns screen: referral chains, tag board and tag manager, compare by interview type (#11).
-   - Search everything with Ctrl+K (#7).
-   - Import survey answers from CSV as Written response interviews (#8).
-   - One-page summary PDF (#12).
-   - Trash with undo. Decide how workspace import treats deleted rows before planning (#14).
+9. **Phase 9 — v0.12.0, patterns and sharing.** Built in three PRs and released together:
+   - **9a:** a Patterns screen with referral chains and compare by interview type. The tag manager goes on Insights, which is already the tag board (#11).
+   - **9b:** Search everything with Ctrl+K (#7). Import survey answers from CSV as Written response interviews (#8).
+   - **9c:** a one-page summary PDF (#12). Trash with undo: a delete counts as an edit on import, so the newest change wins and deleted rows land in Trash, where they can be restored for 30 days (#14).
 10. **Phase 10 — v0.13.0, outreach history:** a dated timeline of outreach events on each contact (channel, reply, meeting set, declined, no reply), a Do not contact flag, and a "Waiting on a reply" list on Home (7 days by default, editable in Settings). Moving a card to Reached out records the event. Needs a migration (#16).
 11. **Phase 11 — v0.14.0, calendar (offline):** a meeting record when a contact moves to Scheduled, a Calendar screen (month, week and agenda views, keyboard navigation, built as a plain grid with no calendar library), `.ics` export per meeting and for all upcoming meetings, a scheduling-link field in Settings, and today's meetings on Home. Needs a migration (#17 step 1).
 12. **Phase 12 — v0.15.0, transcripts:** paste or load `.txt`, `.vtt` or `.srt` files, with an option to strip timestamps. Transcripts are stored in their own table, limited to 1 MB, and included in Search everything. Selected text can be saved as a quote or insight that links back to the transcript. There is a consent checkbox, and transcripts are left out of exports by default. Check FTS5 support before planning. Needs a migration (#22).

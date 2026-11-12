@@ -119,6 +119,8 @@ export function applyImport(db: DB, file: WorkspaceFile): Counts {
   const counts: Counts = {}
   try {
     db.transaction(() => {
+      // Rows of one table can point at each other (a contact's referrer), in any order; check at commit instead.
+      db.pragma('defer_foreign_keys = ON')
       for (const t of WORKSPACE_TABLE_NAMES) {
         const rows = file.tables[t] as Row[]
         if (!rows.length) continue
@@ -133,7 +135,9 @@ export function applyImport(db: DB, file: WorkspaceFile): Counts {
             ? `${c} = CASE WHEN @${c} = '' THEN ${c} ELSE @${c} END`
             : untyped(c)
               ? `${c} = COALESCE(@${c}, ${c})`
-              : `${c} = @${c}`
+              : t === 'contacts' && c === 'referred_by' && file.schema_version < 7
+                ? `${c} = ${c}` // files before v7 can't know referrers; null there is "missing", not "removed"
+                : `${c} = @${c}`
         const update = db.prepare(`UPDATE ${t} SET ${cols.map(set).join(', ')} WHERE id = @id`)
         const classify = classifier(db, t)
         const c = { added: 0, updated: 0, unchanged: 0 }

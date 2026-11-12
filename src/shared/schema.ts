@@ -65,7 +65,9 @@ export const workspaceTables = {
   contacts: z.object({
     id, venture_id: id, segment_id: id.nullable(), name, email: short, phone: short, role: short,
     organization: short, source: z.enum(CONTACT_SOURCES).nullable(), stage: z.enum(CONTACT_STAGES),
-    tags: jsonText, consent_followup: bool, notes: long, ...stamps
+    tags: jsonText, consent_followup: bool, notes: long,
+    // Files exported before migration v7 have no referrer.
+    referred_by: id.nullable().default(null), ...stamps
   }),
   interviews: z.object({
     id, venture_id: id, contact_id: id.nullable(), date,
@@ -150,7 +152,7 @@ const tagList = z.array(short.min(1)).max(30)
 
 export const contactInput = workspaceTables.contacts
   .pick({ segment_id: true, name: true, phone: true, role: true, organization: true, source: true, stage: true, notes: true })
-  .extend({ id: id.optional(), email: optionalEmail, tags: tagList, consent_followup: z.boolean() })
+  .extend({ id: id.optional(), email: optionalEmail, tags: tagList, consent_followup: z.boolean(), referred_by: id.nullable().default(null) })
 
 export const contactStageInput = z.object({ id, stage: z.enum(CONTACT_STAGES) })
 
@@ -223,6 +225,13 @@ export const weeklyGoalInput = z.int('Use a whole number').min(1, 'Aim for at le
 export const taskInput = workspaceTables.tasks
   .pick({ title: true, due_date: true, interview_id: true })
   .extend({ id: id.optional(), done: z.boolean() })
+
+/**
+ * Rename, merge (rename onto an existing tag) or delete (`to: null`) an insight tag across the venture.
+ * `from` matches the tag as stored (imports can carry capitals); the new name is lowercased like splitTags.
+ */
+export const tagRenameInput = z.object({ from: short.min(1), to: short.min(1).transform((t) => t.toLowerCase()).nullable() })
+export type TagRenameInput = z.input<typeof tagRenameInput>
 
 export const insightInput = workspaceTables.insights
   .pick({ interview_id: true, text: true })

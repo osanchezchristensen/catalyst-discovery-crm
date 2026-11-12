@@ -13,6 +13,7 @@ import { Contacts } from '@/screens/Contacts'
 import { Home } from '@/screens/Home'
 import { Hypotheses } from '@/screens/Hypotheses'
 import { Insights } from '@/screens/Insights'
+import { Patterns } from '@/screens/Patterns'
 import { InterviewEditor } from '@/screens/InterviewEditor'
 import { Interviews } from '@/screens/Interviews'
 import { VentureOverview } from '@/screens/VentureOverview'
@@ -20,7 +21,7 @@ import { Settings } from '@/screens/Settings'
 import { Viability } from '@/screens/Viability'
 import { Welcome } from '@/screens/Welcome'
 
-const TITLES: Record<Screen, string> = { home: 'Home', venture: 'Venture', contacts: 'Contacts', hypotheses: 'Hypotheses', interviews: 'Interviews', insights: 'Insights', viability: 'Viability', settings: 'Settings' }
+const TITLES: Record<Screen, string> = { home: 'Home', venture: 'Venture', contacts: 'Contacts', hypotheses: 'Hypotheses', interviews: 'Interviews', insights: 'Insights', patterns: 'Patterns', viability: 'Viability', settings: 'Settings' }
 const api = window.api
 
 export default function App() {
@@ -242,6 +243,8 @@ export default function App() {
               />
             ) : screen === 'insights' ? (
               <Insights key={loads} onOpenInterview={openInterview} onNotify={toastSuccess} onError={onError} />
+            ) : screen === 'patterns' ? (
+              <Patterns key={loads} onOpenInterview={openInterview} onError={onError} />
             ) : screen === 'viability' ? (
               <Viability key={loads} onNotify={toastSuccess} onError={onError} />
             ) : screen === 'hypotheses' ? (

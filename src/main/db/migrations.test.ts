@@ -116,6 +116,23 @@ describe('migrate', () => {
     expect(row('i2').notes).toBe('[1,2]')
   })
 
+  it('v7 adds referred_by to contacts, keeps them, and clears it when the referrer is deleted', () => {
+    const db = fresh()
+    migrate(db, migrations.slice(0, 6))
+    db.prepare("INSERT INTO ventures (id, name, stage, created_at, updated_at) VALUES ('v1', 'Campus Eats', 1, 't', 't')").run()
+    const add = db.prepare("INSERT INTO contacts (id, venture_id, name, created_at, updated_at) VALUES (?, 'v1', ?, 't', 't')")
+    add.run('c1', 'Pat')
+    add.run('c2', 'Maya')
+    migrate(db, migrations.slice(0, 7))
+    expect(db.prepare('SELECT name, referred_by FROM contacts ORDER BY id').all()).toEqual([
+      { name: 'Pat', referred_by: null },
+      { name: 'Maya', referred_by: null }
+    ])
+    db.prepare("UPDATE contacts SET referred_by = 'c1' WHERE id = 'c2'").run()
+    db.prepare("DELETE FROM contacts WHERE id = 'c1'").run()
+    expect(db.prepare("SELECT referred_by FROM contacts WHERE id = 'c2'").pluck().get()).toBeNull()
+  })
+
   it('rolls back a failing function step and leaves the version unchanged', () => {
     const db = fresh()
     migrate(db)

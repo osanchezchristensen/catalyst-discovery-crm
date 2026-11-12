@@ -9,7 +9,7 @@ The [PRD roadmap](prd.md#next-versions) assigns these items to releases. Their d
 | --- | --- |
 | v0.10.0 (Phase 7) | 1, 3, 4, 6, and the 25 MB attachment limit from 15 |
 | v0.11.0 (Phase 8) | 2, 5 |
-| v0.12.0 (Phase 9) | 7, 8, 11, 12, 14 |
+| v0.12.0 (Phase 9: 9a 11; 9b 7, 8; 9c 12, 14) | 7, 8, 11, 12, 14 |
 | v0.13.0 (Phase 10) | 16 |
 | v0.14.0 (Phase 11) | 17 step 1 |
 | v0.15.0 (Phase 12) | 22 |
@@ -68,7 +68,7 @@ Already shipped in v0.9.0, so not new work:
 
 ### Patterns screen
 
-11. **A new Patterns screen** that holds the three pattern finders below, each in its own section.
+11. **A new Patterns screen** that holds the three pattern finders below, each in its own section. Built in 9a. Decision: the Insights screen already is the tag board, so the tag manager goes there, and Patterns holds referral chains and compare by type.
 
     - **Referral chains:** add a "Referred by" contact field and show which interviews led to new ones.
       - Interview guides: the question bank already has "Who else should I talk to about this?" (`src/shared/guides.ts`). Make it the last question of every guide by default, and let the answer create a new contact with "Referred by" filled in.
@@ -89,7 +89,7 @@ Already shipped in v0.9.0, so not new work:
 
 14. **Trash with undo:** deleted interviews and contacts stay in a Trash for 30 days, and can be restored.
     - Needs a migration (a `deleted_at` column).
-    - Open question (undecided): how workspace import treats deleted rows. If a teammate deleted an interview, should importing their file delete it for you too, or keep yours?
+    - Decision: a delete counts as an edit. On import the newest change wins, so a teammate's newer delete moves the row to your Trash (restorable for 30 days), and your newer edit keeps it.
 
 15. **Attach files to interviews:** for example photos of whiteboard notes or survey screenshots, copied into the data folder.
     - Decision: 25 MB limit per file.

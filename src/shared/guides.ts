@@ -23,6 +23,9 @@ export const QUESTION_BANK = [
   'What else should I have asked?'
 ] as const
 
+/** New guides end with this, so every interview can lead to the next one (referral chains, backlog #11). */
+export const REFERRAL_QUESTION = 'Who else should I talk to about this?'
+
 export type QuestionTip = { key: 'yes-no' | 'hypothetical' | 'leading'; tip: string }
 
 const TIPS: Record<QuestionTip['key'], string> = {

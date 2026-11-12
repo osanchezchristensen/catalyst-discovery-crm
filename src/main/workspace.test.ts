@@ -1,7 +1,7 @@
 import { randomUUID } from 'node:crypto'
 import { describe, expect, it } from 'vitest'
-import { createVenture, getActiveVenture, listContacts, listInterviews, saveHypothesis, saveInterview, saveProfile, saveVenture, listHypotheses, listDecisions, recordDecision, saveTask, saveInsight, saveGuide, listTasks, listInsights, listGuides, getThresholds, saveThresholds } from './db/repo'
-import { decisionInput, guideInput, hypothesisInput, insightInput, interviewInput, taskInput } from '../shared/schema'
+import { createVenture, getActiveVenture, listContacts, listInterviews, saveContact, saveHypothesis, saveInterview, saveProfile, saveVenture, listHypotheses, listDecisions, recordDecision, saveTask, saveInsight, saveGuide, listTasks, listInsights, listGuides, getThresholds, saveThresholds } from './db/repo'
+import { contactInput, decisionInput, guideInput, hypothesisInput, insightInput, interviewInput, taskInput } from '../shared/schema'
 import { migrations } from './db/migrations'
 import { testDb } from './test-helpers'
 import { ImportError, applyImport, exportWorkspace, parseWorkspace, previewImport } from './workspace'
@@ -188,6 +188,44 @@ describe('import merge', () => {
     const t2 = testDb()
     applyImport(t2, roundTrip(file))
     expect(listInterviews(t2)[0].notes.behavior).toBe('<p>oksteal()</p>l')
+  })
+
+  it('imports a referred contact listed before the person who referred them', () => {
+    const { db } = seeded()
+    const [pat] = listContacts(db)
+    const maya = saveContact(db, contactInput.parse({ ...pat, id: undefined, name: 'Maya', referred_by: pat.id }))
+    const file = JSON.parse(JSON.stringify(exportWorkspace(db, opts)))
+    file.tables.contacts.sort((a: { id: string }) => (a.id === maya.id ? -1 : 1)) // Maya first
+    expect(file.tables.contacts[0].id).toBe(maya.id)
+    const target = testDb()
+    applyImport(target, roundTrip(file))
+    expect(listContacts(target).find((c) => c.name === 'Maya')?.referred_by).toBe(pat.id)
+  })
+
+  it('keeps the local referrer when a newer file from before v7 updates the contact', () => {
+    const { db } = seeded()
+    const [pat] = listContacts(db)
+    const maya = saveContact(db, contactInput.parse({ ...pat, id: undefined, name: 'Maya', referred_by: pat.id }))
+    const target = testDb()
+    applyImport(target, roundTrip(exportWorkspace(db, opts)))
+    const old = JSON.parse(JSON.stringify(exportWorkspace(db, opts)))
+    for (const c of old.tables.contacts) delete c.referred_by
+    const row = old.tables.contacts.find((c: { id: string }) => c.id === maya.id)
+    row.role = 'Chef'
+    row.updated_at = new Date(Date.now() + 60_000).toISOString()
+    old.schema_version = 6
+    applyImport(target, roundTrip(old))
+    expect(listContacts(target).find((c) => c.id === maya.id)).toMatchObject({ role: 'Chef', referred_by: pat.id })
+  })
+
+  it('imports contacts from a file exported before v7 with no referrer', () => {
+    const { db } = seeded()
+    const file = JSON.parse(JSON.stringify(exportWorkspace(db, opts)))
+    for (const c of file.tables.contacts) delete c.referred_by
+    file.schema_version = 6
+    const target = testDb()
+    applyImport(target, roundTrip(file))
+    expect(listContacts(target)[0].referred_by).toBeNull()
   })
 
   it('round-trips an interview whose four notes are each near the size limit', () => {

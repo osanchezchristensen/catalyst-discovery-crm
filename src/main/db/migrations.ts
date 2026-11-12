@@ -232,7 +232,10 @@ export const migrations: Migration[] = [
       const converted = convertNotes(notes, plainToHtml)
       if (converted !== notes) update.run(converted, id)
     }
-  }
+  },
+  /* v7: who referred a contact (backlog #11, referral chains) */ `
+  ALTER TABLE contacts ADD COLUMN referred_by TEXT REFERENCES contacts(id) ON DELETE SET NULL;
+  `
 ]
 
 /** Applies `fn` to every string field of an interview's notes JSON. Anything malformed is returned unchanged. */

@@ -17,6 +17,7 @@ import type {
   Home,
   Insight,
   insightInput,
+  tagRenameInput,
   Task,
   taskInput,
   decisionInput,
@@ -242,6 +243,15 @@ export function listContacts(db: DB): Contact[] {
 export function saveContact(db: DB, input: ContactSave): Contact {
   const v = requireVenture(db)
   assertInVenture(db, 'segments', input.segment_id, v, 'segment')
+  assertInVenture(db, 'contacts', input.referred_by, v, 'referrer')
+  if (input.id && input.referred_by) {
+    if (input.referred_by === input.id) throw new Error('A contact can’t refer themselves.')
+    // Walk up from the new referrer; reaching this contact would make a loop. Bounded by the number of contacts.
+    const up = db.prepare('SELECT referred_by FROM contacts WHERE id = ?').pluck()
+    for (let at: string | null = input.referred_by, n = 0; at && n < 10_000; at = up.get(at) as string | null, n++) {
+      if (at === input.id) throw new Error('That would make a referral loop. Pick someone they didn’t refer.')
+    }
+  }
   const t = now()
   const p = { ...input, tags: JSON.stringify(input.tags), consent_followup: input.consent_followup ? 1 : 0, v, t }
   let id = input.id
@@ -250,7 +260,7 @@ export function saveContact(db: DB, input: ContactSave): Contact {
       .prepare(
         `UPDATE contacts SET segment_id = @segment_id, name = @name, email = @email, phone = @phone, role = @role,
          organization = @organization, source = @source, stage = @stage, tags = @tags,
-         consent_followup = @consent_followup, notes = @notes, updated_at = @t
+         consent_followup = @consent_followup, notes = @notes, referred_by = @referred_by, updated_at = @t
          WHERE id = @id AND venture_id = @v`
       )
       .run(p).changes
@@ -259,9 +269,9 @@ export function saveContact(db: DB, input: ContactSave): Contact {
     id = randomUUID()
     db.prepare(
       `INSERT INTO contacts (id, venture_id, segment_id, name, email, phone, role, organization, source, stage, tags,
-       consent_followup, notes, created_at, updated_at)
+       consent_followup, notes, referred_by, created_at, updated_at)
        VALUES (@id, @v, @segment_id, @name, @email, @phone, @role, @organization, @source, @stage, @tags,
-       @consent_followup, @notes, @t, @t)`
+       @consent_followup, @notes, @referred_by, @t, @t)`
     ).run({ ...p, id })
   }
   return decodeContact(db.prepare('SELECT * FROM contacts WHERE id = ?').get(id) as Record<string, unknown>)
@@ -752,6 +762,24 @@ export function saveInsight(db: DB, input: InsightSave): Insight {
 
 export function deleteInsight(db: DB, id: string): void {
   db.prepare('DELETE FROM insights WHERE id = ? AND venture_id = ?').run(id, requireVenture(db))
+}
+
+/** Renames, merges or deletes an insight tag across the venture. Returns how many insights changed. */
+export function renameTag(db: DB, { from, to }: z.output<typeof tagRenameInput>): number {
+  const v = requireVenture(db)
+  const t = now()
+  const update = db.prepare('UPDATE insights SET tags = ?, updated_at = ? WHERE id = ?')
+  let changed = 0
+  db.transaction(() => {
+    for (const r of db.prepare('SELECT id, tags FROM insights WHERE venture_id = ?').all(v) as { id: string; tags: string }[]) {
+      const tags = strings(parseJson(r.tags))
+      if (!tags.includes(from)) continue
+      const next = [...new Set(tags.map((x) => (x === from ? to : x)).filter((x): x is string => x !== null))]
+      update.run(JSON.stringify(next), t, r.id) // updated_at moves so a teammate's import picks the change up
+      changed++
+    }
+  })()
+  return changed
 }
 
 /** Most-used insight tags with the average pain score of the interviews they came from. */
