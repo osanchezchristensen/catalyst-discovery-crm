@@ -208,6 +208,14 @@ describe('interviews', () => {
     expect(() => interview({ type: undefined })).toThrow(/Choose an interview type/)
     expect(() => interview({ type: '' })).toThrow(/Choose an interview type/)
   })
+
+  it('cleans note HTML down to the toolbar tags when saving', () => {
+    const db = testDb()
+    createVenture(db, base, 'Sam')
+    const pains = '<p onclick="x()"><strong>Cold</strong> food<script>bad()</script></p><img src=x onerror=alert(1)>'
+    const i = saveInterview(db, interview({ notes: { behavior: '', pains, solutions: '', budget: '' } }))
+    expect(getInterview(db, i.id)?.notes.pains).toBe('<p><strong>Cold</strong> foodbad()</p>')
+  })
 })
 
 const hypothesis = (over: Record<string, unknown> = {}) =>

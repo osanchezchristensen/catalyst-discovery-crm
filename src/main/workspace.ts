@@ -9,6 +9,8 @@ import {
   type WorkspaceFile,
   type WorkspaceTable
 } from '../shared/schema'
+import { cleanNoteHtml, plainToHtml } from '../shared/notes'
+import { convertNotes } from './db/migrations'
 import { ensureWorkspaceId, getActiveVenture, getMeta, setMeta } from './db/repo'
 
 export const MAX_IMPORT_BYTES = 50 * 1024 * 1024
@@ -135,7 +137,9 @@ export function applyImport(db: DB, file: WorkspaceFile): Counts {
         const update = db.prepare(`UPDATE ${t} SET ${cols.map(set).join(', ')} WHERE id = @id`)
         const classify = classifier(db, t)
         const c = { added: 0, updated: 0, unchanged: 0 }
-        for (const row of rows) {
+        for (const raw of rows) {
+          // Notes are HTML from v6 on: clean what a file carries, and turn older plain-text notes into paragraphs.
+          const row = t === 'interviews' ? { ...raw, notes: convertNotes(raw.notes as string, file.schema_version < 6 ? plainToHtml : cleanNoteHtml) } : raw
           const kind = classify(row)
           if (kind === 'added') insert.run(row)
           else if (kind === 'updated') update.run(row)

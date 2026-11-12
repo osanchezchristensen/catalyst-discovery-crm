@@ -65,4 +65,21 @@
   .tabular {
     font-variant-numeric: tabular-nums;
   }
+  /* Interview notes editor (TipTap). Core ProseMirror rules, plus list markers that Tailwind's reset removes. */
+  .ProseMirror {
+    white-space: pre-wrap;
+    word-wrap: break-word;
+    font-variant-ligatures: none;
+  }
+  .notes-editor ul {
+    list-style: disc;
+    padding-left: 1.5rem;
+  }
+  .notes-editor ol {
+    list-style: decimal;
+    padding-left: 1.5rem;
+  }
+  .notes-editor :is(ul, ol) :is(ul, ol) {
+    margin: 0;
+  }
 }

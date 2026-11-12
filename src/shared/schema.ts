@@ -2,6 +2,7 @@
 // Table schemas mirror the SQL in src/main/db/migrations.ts; a test keeps them in sync.
 import { z } from 'zod'
 import type { HypothesisStatus, Tally } from './evidence'
+import { cleanNoteHtml } from './notes'
 import type { ReadinessItem } from './readiness'
 
 const isJson = (s: string): boolean => {
@@ -151,7 +152,9 @@ export const contactInput = workspaceTables.contacts
 
 export const contactStageInput = z.object({ id, stage: z.enum(CONTACT_STAGES) })
 
-export const interviewNotes = z.object({ behavior: long, pains: long, solutions: long, budget: long })
+// Notes are HTML (ADR 0006), cleaned at this trust boundary. The cap is higher than `long` because tags add length.
+const noteHtml = z.string().max(50_000).transform(cleanNoteHtml)
+export const interviewNotes = z.object({ behavior: noteHtml, pains: noteHtml, solutions: noteHtml, budget: noteHtml })
 
 export const evidenceItem = workspaceTables.evidence.pick({ hypothesis_id: true, verdict: true, note: true })
 

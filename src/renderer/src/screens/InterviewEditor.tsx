@@ -15,8 +15,10 @@ import {
   type InterviewInput,
   type InterviewType
 } from '../../../shared/schema'
+import { noteToPlain } from '../../../shared/notes'
 import { SelectField, TextAreaField, TextField } from '@/components/Field'
 import { InsightDialog } from '@/components/InsightDialog'
+import { NotesEditor } from '@/components/NotesEditor'
 import { Button } from '@/components/ui/button'
 import { Card, CardTitle } from '@/components/ui/card'
 import {
@@ -54,7 +56,7 @@ const fromInterview = (i: Interview): InterviewDraft => ({
 
 /** Worth saving once it has a date and either a contact or some notes. */
 const ready = (d: InterviewDraft) =>
-  !!d.date && (!!d.contact_id || !!d.quotes.trim() || Object.values(d.notes).some((n) => n.trim()))
+  !!d.date && (!!d.contact_id || !!d.quotes.trim() || Object.values(d.notes).some((n) => noteToPlain(n).trim()))
 
 /** Create or edit one interview. Autosaves every 5 seconds while there are unsaved changes. */
 export function InterviewEditor({
@@ -161,7 +163,7 @@ export function InterviewEditor({
 
   if (!draft) return null
   const guide = guides.find((g) => g.id === guideId)
-  /** Remembers highlighted text in a notes box so it can become an insight. */
+  /** Remembers highlighted text in the quotes box so it can become an insight (notes boxes report theirs directly). */
   const capture = (quote: boolean) => (e: SyntheticEvent<HTMLTextAreaElement>) => {
     const t = e.currentTarget
     const text = t.value.slice(t.selectionStart, t.selectionEnd).trim()
@@ -387,14 +389,13 @@ export function InterviewEditor({
         <p className="mt-1 text-[13px] text-muted-foreground">Write down what they did, not what they say they would do.</p>
         <div className="mt-4 grid grid-cols-2 gap-4">
           {NOTE_FIELDS.map((f) => (
-            <TextAreaField
+            <NotesEditor
               key={f.key}
               label={f.label}
               hint={f.hint}
               value={draft.notes[f.key]}
-              onChange={(e) => setNote(f.key, e.target.value)}
-              onSelect={capture(false)}
-              maxLength={20000}
+              onChange={(html) => setNote(f.key, html)}
+              onSelectText={(text) => setSelection({ text, quote: false })}
             />
           ))}
           <div className="col-span-2">

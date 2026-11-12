@@ -17,6 +17,7 @@ import {
   type ContactMapping
 } from '../shared/schema'
 import { backupBeforeReset } from './backup'
+import { noteToPlain } from '../shared/notes'
 import { toCsv } from './csv'
 import { activeVentureId, getActiveVenture, listContacts, saveContact } from './db/repo'
 import { exportWorkspace } from './workspace'
@@ -52,7 +53,7 @@ export function exportCsv(db: DB, dir: string, opts: { includeContactDetails: bo
     let columns = Object.keys(workspaceTables[t].shape)
     let rows = (tables[t] as Record<string, unknown>[]).map((r) => columns.map((c) => readable(r[c])))
     if (t === 'interviews') {
-      // Structured notes become one column per section.
+      // Structured notes become one plain-text column per section (lists as "• " lines).
       const at = columns.indexOf('notes')
       rows = (tables.interviews as Record<string, unknown>[]).map((r, k) => {
         let notes: Record<string, unknown> = {}
@@ -61,7 +62,8 @@ export function exportCsv(db: DB, dir: string, opts: { includeContactDetails: bo
         } catch {
           // Malformed notes export as blanks.
         }
-        return [...rows[k].slice(0, at), ...NOTE_KEYS.map((key) => (typeof notes?.[key] === 'string' ? (notes[key] as string) : '')), ...rows[k].slice(at + 1)]
+        const plain = (key: string) => (typeof notes?.[key] === 'string' ? noteToPlain(notes[key] as string) : '')
+        return [...rows[k].slice(0, at), ...NOTE_KEYS.map(plain), ...rows[k].slice(at + 1)]
       })
       columns = [...columns.slice(0, at), ...NOTE_KEYS.map((k) => `notes_${k}`), ...columns.slice(at + 1)]
     }
