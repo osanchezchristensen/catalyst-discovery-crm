@@ -251,7 +251,23 @@ export function InterviewEditor({
 
       <Card>
         <CardTitle>Who and when</CardTitle>
-        <div className="mt-4 grid grid-cols-[10rem_1fr_10rem_10rem] gap-4">
+        {/* Contact gets the wide column; Type and Format share a row so the type hint can wrap without pushing other fields. */}
+        <div className="mt-4 grid grid-cols-[1fr_1fr_10rem] gap-4">
+          <div className="col-span-2">
+            <SelectField
+              label="Contact"
+              value={draft.contact_id ?? ''}
+              onChange={(e) => set({ contact_id: e.target.value || null })}
+              error={errors.contact_id}
+            >
+              <option value="">No contact</option>
+              {contacts.map((c) => (
+                <option key={c.id} value={c.id}>
+                  {c.organization ? `${c.name}, ${c.organization}` : c.name}
+                </option>
+              ))}
+            </SelectField>
+          </div>
           <TextField
             label="Date"
             type="date"
@@ -259,19 +275,29 @@ export function InterviewEditor({
             onChange={(e) => set({ date: e.target.value })}
             error={errors.date}
           />
-          <SelectField
-            label="Contact"
-            value={draft.contact_id ?? ''}
-            onChange={(e) => set({ contact_id: e.target.value || null })}
-            error={errors.contact_id}
-          >
-            <option value="">No contact</option>
-            {contacts.map((c) => (
-              <option key={c.id} value={c.id}>
-                {c.organization ? `${c.name}, ${c.organization}` : c.name}
-              </option>
-            ))}
-          </SelectField>
+          <div className="col-span-2 flex items-start gap-2">
+            <div className="flex-1">
+              <TextField
+                label="New contact"
+                hideLabel
+                placeholder="Or add a new contact by name…"
+                value={quickContact}
+                onChange={(e) => setQuickContact(e.target.value)}
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter') {
+                    e.preventDefault()
+                    void addContact()
+                  }
+                }}
+                maxLength={200}
+              />
+            </div>
+            <Button variant="secondary" onClick={addContact} disabled={!quickContact.trim()}>
+              <Plus aria-hidden strokeWidth={1.5} />
+              Add contact
+            </Button>
+          </div>
+          <div />
           <SelectField
             label="Type"
             value={draft.type}
@@ -296,28 +322,6 @@ export function InterviewEditor({
               </option>
             ))}
           </SelectField>
-          <div className="col-span-3 col-start-2 flex items-start gap-2">
-            <div className="flex-1">
-              <TextField
-                label="New contact"
-                hideLabel
-                placeholder="Or add a new contact by name…"
-                value={quickContact}
-                onChange={(e) => setQuickContact(e.target.value)}
-                onKeyDown={(e) => {
-                  if (e.key === 'Enter') {
-                    e.preventDefault()
-                    void addContact()
-                  }
-                }}
-                maxLength={200}
-              />
-            </div>
-            <Button variant="secondary" onClick={addContact} disabled={!quickContact.trim()}>
-              <Plus aria-hidden strokeWidth={1.5} />
-              Add contact
-            </Button>
-          </div>
         </div>
         <fieldset className="mt-4">
           <legend className="text-[13px] font-semibold">Interviewers</legend>
