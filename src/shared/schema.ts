@@ -23,6 +23,7 @@ const long = z.string().max(20_000)
 const name = short.min(1, 'Required')
 const bool = z.union([z.literal(0), z.literal(1)])
 const jsonText = z.string().max(100_000).refine(isJson, 'Must be valid JSON')
+const NOTE_MAX = 50_000 // per interview note, in HTML; tags add length, so it is above `long`
 const stage = z.int().min(1).max(3)
 const stamps = { created_at: ts, updated_at: ts }
 
@@ -70,7 +71,8 @@ export const workspaceTables = {
     id, venture_id: id, contact_id: id.nullable(), date,
     // Files exported before migration v5 have no type: null here; import keeps the local type or falls back to Validation.
     type: z.enum(INTERVIEW_TYPES).nullable().default(null), format: z.enum(INTERVIEW_FORMATS), interviewers: jsonText,
-    notes: jsonText, quotes: long, pain_score: z.int().min(1).max(5).nullable(), wtp_signal: short,
+    // Four HTML notes of up to NOTE_MAX each, plus JSON keys and escaping.
+    notes: z.string().max(4 * NOTE_MAX + 10_000).refine(isJson, 'Must be valid JSON'), quotes: long, pain_score: z.int().min(1).max(5).nullable(), wtp_signal: short,
     next_step: long, follow_up_date: date.nullable(), ...stamps
   }),
   hypotheses: z.object({
@@ -152,8 +154,8 @@ export const contactInput = workspaceTables.contacts
 
 export const contactStageInput = z.object({ id, stage: z.enum(CONTACT_STAGES) })
 
-// Notes are HTML (ADR 0006), cleaned at this trust boundary. The cap is higher than `long` because tags add length.
-const noteHtml = z.string().max(50_000).transform(cleanNoteHtml)
+// Notes are HTML (ADR 0006), cleaned at this trust boundary.
+const noteHtml = z.string().max(NOTE_MAX, 'This note is too long. Split it or move some of it to an attachment.').transform(cleanNoteHtml)
 export const interviewNotes = z.object({ behavior: noteHtml, pains: noteHtml, solutions: noteHtml, budget: noteHtml })
 
 export const evidenceItem = workspaceTables.evidence.pick({ hypothesis_id: true, verdict: true, note: true })

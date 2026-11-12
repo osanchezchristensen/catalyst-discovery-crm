@@ -39,6 +39,7 @@ describe('noteToPlain', () => {
     expect(noteToPlain('<ul><li><p>a</p><ol><li><p>b</p></li></ol></li></ul>')).toBe('• a\n  1. b')
     expect(noteToPlain(plainToHtml('x < y\n\nz'))).toBe('x < y\n\nz')
     expect(noteToPlain('')).toBe('')
+    expect(noteToPlain('<p>&#9999999999; &#x1F600; &#65;</p>')).toBe('&#9999999999; 😀 A') // out of range stays as text
     expect(noteToPlain('<ul><li><p>a</p></li></ul><p>after</p>')).toBe('• a\nafter')
     expect(noteToPlain('<p>loose</p>text outside')).toBe('loose\ntext outside')
   })

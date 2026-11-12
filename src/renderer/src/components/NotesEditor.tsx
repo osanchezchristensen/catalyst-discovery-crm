@@ -6,7 +6,7 @@ import Text from '@tiptap/extension-text'
 import Underline from '@tiptap/extension-underline'
 import { UndoRedo } from '@tiptap/extensions'
 import { EditorContent, useEditor, useEditorState, type Editor } from '@tiptap/react'
-import { Bold as BoldIcon, List, ListOrdered, Underline as UnderlineIcon, type LucideIcon } from 'lucide-react'
+import { AlertCircle, Bold as BoldIcon, List, ListOrdered, Underline as UnderlineIcon, type LucideIcon } from 'lucide-react'
 import { useEffect, useId, useRef, useState, type KeyboardEvent } from 'react'
 import { cn } from '@/lib/utils'
 
@@ -24,16 +24,27 @@ const TOOLS: Tool[] = [
 
 const html = (e: Editor) => (e.isEmpty ? '' : e.getHTML())
 
+/** ARIA for the editable area, matching Field.tsx: an error replaces the hint and marks it invalid. */
+const attributes = (id: string, hint?: string, error?: string): Record<string, string> => ({
+  role: 'textbox',
+  'aria-multiline': 'true',
+  'aria-labelledby': `${id}-label`,
+  ...(error ? { 'aria-describedby': `${id}-error`, 'aria-invalid': 'true' } : hint ? { 'aria-describedby': `${id}-hint` } : {}),
+  class: 'notes-editor min-h-24 px-3 py-2 outline-none'
+})
+
 /** A notes box with a bold, underline and list toolbar. `value` and `onChange` carry note HTML ('' when empty). */
 export function NotesEditor({
   label,
   hint,
+  error,
   value,
   onChange,
   onSelectText
 }: {
   label: string
   hint?: string
+  error?: string
   value: string
   onChange: (html: string) => void
   onSelectText?: (text: string) => void
@@ -49,15 +60,7 @@ export function NotesEditor({
     extensions: EXTENSIONS,
     content: value,
     injectCSS: false, // the few rules it needs live in index.css, next to the tokens
-    editorProps: {
-      attributes: {
-        role: 'textbox',
-        'aria-multiline': 'true',
-        'aria-labelledby': `${id}-label`,
-        ...(hint ? { 'aria-describedby': `${id}-hint` } : {}),
-        class: 'notes-editor min-h-24 px-3 py-2 outline-none'
-      }
-    },
+    editorProps: { attributes: attributes(id, hint, error) },
     onUpdate: ({ editor: e }) => {
       emitted.current = html(e)
       callbacks.current.onChange(emitted.current)
@@ -68,6 +71,11 @@ export function NotesEditor({
       if (text) callbacks.current.onSelectText?.(text)
     }
   })
+
+  // The editable area is TipTap's own element, so a new error reaches its ARIA attributes through the editor.
+  useEffect(() => {
+    editor?.setOptions({ editorProps: { attributes: attributes(id, hint, error) } })
+  }, [editor, id, hint, error])
 
   // Load a different value from outside (opening an interview) without echoing it back as an edit.
   useEffect(() => {
@@ -96,7 +104,12 @@ export function NotesEditor({
       <span id={`${id}-label`} className="text-[13px] font-semibold">
         {label}
       </span>
-      <div className="rounded-md border border-input bg-card transition-colors duration-150 ease-out focus-within:outline-2 focus-within:outline-offset-2 focus-within:outline-ring hover:border-muted-foreground">
+      <div
+        className={cn(
+          'rounded-md border border-input bg-card transition-colors duration-150 ease-out focus-within:outline-2 focus-within:outline-offset-2 focus-within:outline-ring hover:border-muted-foreground',
+          error && 'border-2 border-foreground' // as Field.tsx: a heavier Night border plus icon and text, never Crimson
+        )}
+      >
         <div role="toolbar" aria-label={`${label} formatting`} className="flex gap-1 border-b border-input p-1" onKeyDown={onToolbarKey}>
           {TOOLS.map((t, i) => (
             <button
@@ -123,9 +136,15 @@ export function NotesEditor({
         </div>
         <EditorContent editor={editor} className="text-[15px] text-foreground" />
       </div>
-      {hint && (
+      {hint && !error && (
         <p id={`${id}-hint`} className="text-[13px] text-muted-foreground">
           {hint}
+        </p>
+      )}
+      {error && (
+        <p id={`${id}-error`} className="flex items-center gap-1 text-[13px] font-semibold">
+          <AlertCircle className="size-4 shrink-0" aria-hidden />
+          {error}
         </p>
       )}
     </div>

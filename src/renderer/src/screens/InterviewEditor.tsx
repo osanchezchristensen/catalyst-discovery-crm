@@ -163,11 +163,11 @@ export function InterviewEditor({
 
   if (!draft) return null
   const guide = guides.find((g) => g.id === guideId)
-  /** Remembers highlighted text in the quotes box so it can become an insight (notes boxes report theirs directly). */
-  const capture = (quote: boolean) => (e: SyntheticEvent<HTMLTextAreaElement>) => {
+  /** Remembers highlighted text in the quotes box so it can become a quote insight (notes boxes report theirs directly). */
+  const captureQuote = (e: SyntheticEvent<HTMLTextAreaElement>) => {
     const t = e.currentTarget
     const text = t.value.slice(t.selectionStart, t.selectionEnd).trim()
-    if (text) setSelection({ text, quote })
+    if (text) setSelection({ text, quote: true })
   }
   const attach = async () => {
     if (!id) return
@@ -393,6 +393,7 @@ export function InterviewEditor({
               key={f.key}
               label={f.label}
               hint={f.hint}
+              error={errors[`notes.${f.key}`]}
               value={draft.notes[f.key]}
               onChange={(html) => setNote(f.key, html)}
               onSelectText={(text) => setSelection({ text, quote: false })}
@@ -404,7 +405,7 @@ export function InterviewEditor({
               hint="Their exact words. One per line."
               value={draft.quotes}
               onChange={(e) => set({ quotes: e.target.value })}
-              onSelect={capture(true)}
+              onSelect={captureQuote}
               maxLength={20000}
             />
           </div>

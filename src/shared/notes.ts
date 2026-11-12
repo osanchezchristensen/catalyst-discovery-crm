@@ -32,8 +32,12 @@ export function plainToHtml(text: string): string {
 
 const ENTITIES: Record<string, string> = { amp: '&', lt: '<', gt: '>', quot: '"', apos: "'", nbsp: ' ' }
 const decode = (s: string) =>
-  s.replace(/&(#\d+|#x[\da-f]+|[a-z]+);/gi, (whole, e: string) =>
-    e[0] === '#' ? String.fromCodePoint(parseInt(e.slice(e[1] === 'x' || e[1] === 'X' ? 2 : 1), e[1] === 'x' || e[1] === 'X' ? 16 : 10)) : (ENTITIES[e.toLowerCase()] ?? whole)
+  s.replace(/&(#\d+|#x[\da-f]+|[a-z]+);/gi, (whole, e: string) => {
+    if (e[0] !== '#') return ENTITIES[e.toLowerCase()] ?? whole
+    const hex = e[1] === 'x' || e[1] === 'X'
+    const code = parseInt(e.slice(hex ? 2 : 1), hex ? 16 : 10)
+    return code <= 0x10ffff ? String.fromCodePoint(code) : whole // fromCodePoint throws past the Unicode range
+  }
   )
 
 /** Note HTML to plain text for CSV and emptiness checks: lists become "• " and "1. " lines ("- " would trip the CSV formula guard). */

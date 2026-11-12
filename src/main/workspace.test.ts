@@ -190,6 +190,18 @@ describe('import merge', () => {
     expect(listInterviews(t2)[0].notes.behavior).toBe('<p>oksteal()</p>l')
   })
 
+  it('round-trips an interview whose four notes are each near the size limit', () => {
+    const { db } = seeded()
+    const long = `<p>${'x'.repeat(45_000)}</p>`
+    saveInterview(db, interviewInput.parse({
+      contact_id: null, date: '2026-11-03', type: 'sales', format: 'video', interviewers: [], quotes: '', pain_score: null,
+      wtp_signal: '', next_step: '', follow_up_date: null, notes: { behavior: long, pains: long, solutions: long, budget: long }
+    }))
+    const target = testDb()
+    applyImport(target, roundTrip(exportWorkspace(db, opts)))
+    expect(listInterviews(target)[0].notes.budget).toBe(long)
+  })
+
   it('keeps the local interview type when a newer file from v0.9 updates the interview', () => {
     const { db } = seeded()
     saveInterview(db, interviewInput.parse({

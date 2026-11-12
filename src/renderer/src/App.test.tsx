@@ -80,6 +80,16 @@ describe('interview editor inside the app', () => {
     )
   })
 
+  it('says which note is too long when autosave refuses it', async () => {
+    const api = installFakeApi()
+    const pains = await openNewInterview()
+    await write(pains, `<p>${'x'.repeat(50_001)}</p>`)
+    await act(() => vi.advanceTimersByTimeAsync(5000))
+    expect(api.saveInterview).not.toHaveBeenCalled()
+    expect(await screen.findByText(/This note is too long/)).toBeTruthy()
+    expect(screen.getByLabelText('Pains').getAttribute('aria-invalid')).toBe('true')
+  })
+
   it('formats notes from the toolbar and keeps only toolbar formatting from a paste', async () => {
     const api = installFakeApi()
     const pains = await openNewInterview()
