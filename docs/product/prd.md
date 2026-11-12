@@ -81,8 +81,8 @@ These thresholds are defaults that can be edited per cohort. Confirm them with p
 | venture_members | venture_id, name, role (owner, member) | team names on a venture |
 | guides | id, venture_id, name, questions (JSON) | interview guides (F9), ADR 0003 |
 | segments | id, venture_id, name, description, is_beachhead | used by contacts and interviews |
-| contacts | id, venture_id, segment_id, name, email, phone, role, organization, source, stage, tags, consent_followup, notes, referred_by (contact) | has interviews; referral chains |
-| interviews | id, venture_id, contact_id, date, type, format, interviewers, notes (JSON of allowlisted HTML, [ADR 0006](../decisions/0006-interview-notes-as-allowlisted-html.md)), quotes, pain_score, wtp_signal, next_step, follow_up_date | links to hypotheses and insights |
+| contacts | id, venture_id, segment_id, name, email, phone, role, organization, source, stage, tags, consent_followup, notes, referred_by (contact), deleted_at (in Trash since, [ADR 0007](../decisions/0007-trash-as-soft-delete-column.md)) | has interviews; referral chains |
+| interviews | id, venture_id, contact_id, date, type, format, interviewers, notes (JSON of allowlisted HTML, [ADR 0006](../decisions/0006-interview-notes-as-allowlisted-html.md)), quotes, pain_score, wtp_signal, next_step, follow_up_date, deleted_at (in Trash since) | links to hypotheses and insights |
 | hypotheses | id, venture_id, version, type, statement, risk, status, success_criteria | linked through evidence |
 | evidence | id, hypothesis_id, interview_id, verdict (supports, refutes, neutral), note | joins interviews to hypotheses |
 | insights | id, venture_id, interview_id, text, tags, is_quote | from interviews |
@@ -103,7 +103,7 @@ All ids are UUIDs, so workspaces from different computers can merge on import. A
 - Anyone at the computer can see the data.
 - **Workspace export:** the full workspace exports as JSON (plus CSV per table). This is how a founder shares a venture with teammates or moves to another computer. Exports leave out interviewee emails and phone numbers by default. Attachments stay on this computer and are not included.
 - **Import:** imported files are untrusted input. Validate them against a schema and preview the changes before merging.
-- **Consent:** every contact has a consent checkbox and can be deleted on request.
+- **Consent:** every contact has a consent checkbox and can be deleted on request: delete it, then use Delete forever in Settings ▸ Trash.
 - **KU policy:** confirm FERPA and data-handling expectations with KU IT before launch.
 
 ## Screens
@@ -119,8 +119,8 @@ All ids are UUIDs, so workspaces from different computers can merge on import. A
 | Insights | Founder | Tag board (one column per tag), tag manager to rename, merge and delete tags |
 | Patterns | Founder | Referral chains; Validation vs Sales comparison of pain, buying signals and quotes |
 | Search (Ctrl+K) | Founder | One box over contacts, interviews, insights and hypotheses; opens the result |
-| Viability dashboard | Founder | Charts, scorecard, readiness checklist, decision log |
-| Settings | All | Profile, cohort thresholds, export and import, backups, open data folder, reset workspace |
+| Viability dashboard | Founder | Charts, scorecard, readiness checklist, decision log, one-page summary PDF |
+| Settings | All | Profile, cohort thresholds, export and import, Trash (restore or delete forever), backups, open data folder, reset workspace |
 
 ## Core flows
 1. **Onboarding:** open the app → enter your name → create a venture or import a workspace file → add 1–3 segments → write 3 starter hypotheses from a template → set a weekly interview goal.

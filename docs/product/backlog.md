@@ -80,14 +80,14 @@ Already shipped in v0.9.0, so not new work:
 
 ### Share progress
 
-12. **One-page summary PDF:** the venture, top hypotheses, readiness, best quotes and the latest decision, for mentor meetings or demo day. It uses Electron's built-in print-to-PDF, so no new dependency.
+12. **One-page summary PDF:** the venture, top hypotheses, readiness, best quotes and the latest decision, for mentor meetings or demo day. It uses Electron's built-in print-to-PDF, so no new dependency. Built in 9c: Viability ▸ Summary PDF (and File ▸ Summary PDF…) shows a preview of one Letter page with up to 5 riskiest hypotheses and the 3 newest quotes.
 
 13. **Follow-up reminders:** when the app opens, show follow-ups that are due today or overdue.
     - **Follow-up email template:** a "Copy follow-up email" button on each interview that fills in the contact's name, a thank-you, the next step and the follow-up date. The student pastes it into their own email (the app never sends email). Let students edit the template in Settings.
 
 ### Protect work
 
-14. **Trash with undo:** deleted interviews and contacts stay in a Trash for 30 days, and can be restored.
+14. **Trash with undo:** deleted interviews and contacts stay in a Trash for 30 days, and can be restored. Built in 9c as a `deleted_at` column ([ADR 0007](../decisions/0007-trash-as-soft-delete-column.md)): Undo on the delete message, Settings ▸ Trash with Restore and Delete forever, purge at startup. CSV export leaves Trash out; workspace files carry it so deletes sync.
     - Needs a migration (a `deleted_at` column).
     - Decision: a delete counts as an edit. On import the newest change wins, so a teammate's newer delete moves the row to your Trash (restorable for 30 days), and your newer edit keeps it.
 
