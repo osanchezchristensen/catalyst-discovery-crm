@@ -1,4 +1,4 @@
-import { ListOrdered, MessagesSquare, Plus } from 'lucide-react'
+import { FileUp, ListOrdered, MessagesSquare, Plus } from 'lucide-react'
 import { useEffect, useState } from 'react'
 import type { Guide, Interview } from '../../../shared/schema'
 import { GuideEditor } from '@/components/GuideEditor'
@@ -11,12 +11,14 @@ type Tab = 'interviews' | 'guides'
 
 export function Interviews({
   onOpen,
+  onImportSurveys,
   onNotify,
   onDirtyChange,
   confirmLeave,
   onError
 }: {
   onOpen: (id: string | null) => void
+  onImportSurveys: () => void
   onNotify: (message: string) => void
   onDirtyChange: (dirty: boolean) => void
   /** Asks before discarding unsaved guide edits when switching tabs. */
@@ -47,7 +49,7 @@ export function Interviews({
           </button>
         ))}
       </div>
-      {tab === 'interviews' ? <InterviewList onOpen={onOpen} onError={onError} /> : <Guides onNotify={onNotify} onDirtyChange={onDirtyChange} onError={onError} />}
+      {tab === 'interviews' ? <InterviewList onOpen={onOpen} onImportSurveys={onImportSurveys} onError={onError} /> : <Guides onNotify={onNotify} onDirtyChange={onDirtyChange} onError={onError} />}
     </div>
   )
 }
@@ -123,7 +125,15 @@ function Guides({
   )
 }
 
-function InterviewList({ onOpen, onError }: { onOpen: (id: string | null) => void; onError: (err: unknown) => void }) {
+function InterviewList({
+  onOpen,
+  onImportSurveys,
+  onError
+}: {
+  onOpen: (id: string | null) => void
+  onImportSurveys: () => void
+  onError: (err: unknown) => void
+}) {
   const [interviews, setInterviews] = useState<Interview[] | null>(null)
   useEffect(() => {
     window.api.listInterviews().then(setInterviews, onError)
@@ -131,10 +141,16 @@ function InterviewList({ onOpen, onError }: { onOpen: (id: string | null) => voi
 
   if (!interviews) return null
   const logButton = (
-    <Button onClick={() => onOpen(null)}>
-      <Plus aria-hidden strokeWidth={1.5} />
-      Log interview
-    </Button>
+    <div className="flex gap-2">
+      <Button variant="secondary" onClick={onImportSurveys}>
+        <FileUp aria-hidden strokeWidth={1.5} />
+        Import survey answers
+      </Button>
+      <Button onClick={() => onOpen(null)}>
+        <Plus aria-hidden strokeWidth={1.5} />
+        Log interview
+      </Button>
+    </div>
   )
 
   if (interviews.length === 0) {

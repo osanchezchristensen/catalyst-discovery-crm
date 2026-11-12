@@ -12,11 +12,16 @@ type View = 'board' | 'table'
 
 export function Contacts({
   segments,
+  openId,
+  onOpened,
   onOpenInterview,
   onNotify,
   onError
 }: {
   segments: Segment[]
+  /** A contact to open once the list has loaded (from search). */
+  openId?: string | null
+  onOpened?: () => void
   onOpenInterview: (id: string) => void
   onNotify: (message: string) => void
   onError: (err: unknown) => void
@@ -31,8 +36,20 @@ export function Contacts({
   const [open, setOpen] = useState<Contact | null>(null)
   const [dropTarget, setDropTarget] = useState<ContactStage | null>(null)
 
-  const reload = useCallback(() => window.api.listContacts().then(setContacts, onError), [onError])
-  useEffect(() => void reload(), [reload])
+  // Loads the list; `focus` opens that contact once it arrives (a search result).
+  const reload = useCallback(
+    (focus?: string | null) =>
+      window.api.listContacts().then((list) => {
+        setContacts(list)
+        const c = focus && list.find((x) => x.id === focus)
+        if (c) {
+          setOpen(c)
+          onOpened?.()
+        }
+      }, onError),
+    [onError, onOpened]
+  )
+  useEffect(() => void reload(openId), [reload, openId])
 
   if (!contacts) return null
 

@@ -118,6 +118,7 @@ All ids are UUIDs, so workspaces from different computers can merge on import. A
 | Hypotheses | Founder | Cards grouped by type with status chip, risk and evidence tally; drill into linked interviews |
 | Insights | Founder | Tag board (one column per tag), tag manager to rename, merge and delete tags |
 | Patterns | Founder | Referral chains; Validation vs Sales comparison of pain, buying signals and quotes |
+| Search (Ctrl+K) | Founder | One box over contacts, interviews, insights and hypotheses; opens the result |
 | Viability dashboard | Founder | Charts, scorecard, readiness checklist, decision log |
 | Settings | All | Profile, cohort thresholds, export and import, backups, open data folder, reset workspace |
 
@@ -125,6 +126,7 @@ All ids are UUIDs, so workspaces from different computers can merge on import. A
 1. **Onboarding:** open the app → enter your name → create a venture or import a workspace file → add 1–3 segments → write 3 starter hypotheses from a template → set a weekly interview goal.
 2. **Log an interview:** press "Log interview" (Ctrl/Cmd+N) → pick or quick-add a contact → fill in the structured notes → for each open hypothesis, choose Supports, Refutes or Neutral → highlight insights → set the next step and follow-up date → save. The contact moves to Interviewed.
 3. **Viability decision:** founder reviews the dashboard → completes the checklist → records Persevere, Pivot, Pause or Stop with a rationale. A pivot copies the hypotheses into a new version.
+4. **Import survey answers:** File ▸ Import Survey Answers from CSV (or Interviews ▸ Import survey answers) → pick the respondent name, email and date columns and the interview type → send each question to a note section or skip it → preview → import. Each response becomes a Written response interview; unknown people become contacts; importing the same file again adds nothing.
 
 ## Non-functional requirements
 - **Platforms:** Windows 10+, macOS 12+, Ubuntu 22.04+. Installers: NSIS `.exe`, universal `.dmg`, `.AppImage`.

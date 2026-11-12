@@ -58,9 +58,9 @@ Already shipped in v0.9.0, so not new work:
 
 ### Save time
 
-7. **Search everything:** one search box (Ctrl+K) that finds contacts, interviews, quotes and hypotheses.
+7. **Search everything:** one search box (Ctrl+K) that finds contacts, interviews, quotes and hypotheses. Built in 9b: in-memory, case- and accent-insensitive, every word must match; also a Search button in the header. No full-text index yet (revisit with transcripts, #22).
 
-8. **Import survey answers:** load a CSV from Google Forms or Qualtrics, and turn each row into a "Written response" interview (item 4). The student matches columns to contacts and notes.
+8. **Import survey answers:** load a CSV from Google Forms or Qualtrics, and turn each row into a "Written response" interview (item 4). The student matches columns to contacts and notes. Built in 9b: people are matched by email then name (unknown people become contacts), each answer goes to a chosen note section with its question in bold, Qualtrics' extra header rows are handled, and a row is skipped as already imported when that person already has a Written response on that date.
 
 9. **Duplicate contact warning:** flag a new or imported contact whose name or email matches an existing one.
 
