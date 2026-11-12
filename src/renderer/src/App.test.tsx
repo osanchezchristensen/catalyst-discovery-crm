@@ -143,3 +143,28 @@ describe('referrals and tags', () => {
     expect(api.renameTag).toHaveBeenCalledWith({ from: 'price', to: 'pricing' })
   })
 })
+
+describe('search everything', () => {
+  it('finds a contact and opens their card on the Contacts screen', async () => {
+    installFakeApi({ contacts: [contact('00000000-0000-4000-8000-0000000000aa', 'Pat Lee')], insights: [insight('n1', 'Parking is awful', [])] })
+    render(<App />)
+    fireEvent.click(await screen.findByRole('button', { name: /^Search/ }))
+    const box = await screen.findByRole('searchbox', { name: 'Search' })
+    fireEvent.change(box, { target: { value: 'lee' } })
+    expect(await screen.findByRole('heading', { name: /Contacts/ })).toBeTruthy()
+    fireEvent.keyDown(box, { key: 'Enter' })
+    expect(await screen.findByRole('dialog', { name: 'Pat Lee' })).toBeTruthy()
+  })
+
+  it('says when nothing matches and finds insights by their text', async () => {
+    installFakeApi({ insights: [insight('n1', 'Parking is awful', ['commute'])] })
+    render(<App />)
+    fireEvent.click(await screen.findByRole('button', { name: /^Search/ }))
+    const box = await screen.findByRole('searchbox', { name: 'Search' })
+    fireEvent.change(box, { target: { value: 'banana' } })
+    expect(await screen.findByText(/Nothing matches “banana”/)).toBeTruthy()
+    fireEvent.change(box, { target: { value: 'PARKING' } })
+    fireEvent.click(await screen.findByRole('button', { name: /Parking is awful/ }))
+    expect(await screen.findByRole('heading', { level: 1, name: 'Insights' })).toBeTruthy()
+  })
+})

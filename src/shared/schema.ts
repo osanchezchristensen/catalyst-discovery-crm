@@ -204,6 +204,20 @@ export type ContactMapping = z.infer<typeof contactMapping>
 export const contactImportRequest = z.object({ token: z.uuid(), mapping: contactMapping, segment_id: id.nullable() })
 export type ContactImportRequest = z.infer<typeof contactImportRequest>
 
+/** Where each survey answer column goes: one of the four note sections, or the key quotes. */
+export const SURVEY_SECTIONS = ['behavior', 'pains', 'solutions', 'budget', 'quotes'] as const
+const col = z.int().min(0)
+export const surveyMapping = z.object({
+  name: col.nullable(),
+  email: col.nullable(),
+  date: col.nullable(),
+  type: z.enum(INTERVIEW_TYPES),
+  answers: z.array(z.object({ col, section: z.enum(SURVEY_SECTIONS) })).max(500)
+})
+export type SurveyMapping = z.infer<typeof surveyMapping>
+export const surveyImportRequest = z.object({ token: z.uuid(), mapping: surveyMapping })
+export type SurveyImportRequest = z.infer<typeof surveyImportRequest>
+
 export const exportOptions = z.object({ includeContactDetails: z.boolean() }).optional()
 export const confirmNameInput = z.string().max(200)
 

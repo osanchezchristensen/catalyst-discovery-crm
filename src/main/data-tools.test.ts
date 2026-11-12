@@ -5,6 +5,10 @@ import { describe, expect, it } from 'vitest'
 import { contactInput, interviewInput, type ContactMapping } from '../shared/schema'
 import {
   addAttachment,
+  applySurveyImport,
+  planSurveyImport,
+  qualtricsHeaders,
+  suggestSurveyMapping,
   applyContactImport,
   attachmentPath,
   deleteAttachment,
@@ -86,6 +90,69 @@ describe('contact CSV import', () => {
 
   it('refuses a column index past the end of the file', () => {
     expect(() => planContactImport(seeded(), csv.rows, { ...mapping, notes: 9 }, null)).toThrow(/doesn't exist/)
+  })
+})
+
+describe('survey CSV import', () => {
+  const csv = parseCsv(
+    [
+      'Timestamp,Email Address,Your name,How do you get to campus?,What is hardest about it?',
+      '11/3/2026 14:22:01,PAT@x.com,,I drive,Parking takes 20 minutes',
+      '2026-11-04 09:00:00,,Kim,Bus,"Late buses\nand no shelter"',
+      '2026-11-05,,,,',
+      'yesterday,,Lee,Walk,Rain',
+      '2026-11-06,new@x.com,New Person,Bike,Theft',
+      '2026-11-06,,Kim,Bus again,'
+    ].join('\n')
+  )
+  const mapping = suggestSurveyMapping(csv.headers)
+
+  it('suggests identity columns, skips survey-tool metadata, and offers every other column as an answer', () => {
+    expect(mapping).toEqual({
+      name: 2, email: 1, date: 0, type: 'validation',
+      answers: [{ col: 3, section: 'behavior' }, { col: 4, section: 'behavior' }]
+    })
+    expect(suggestSurveyMapping(['StartDate', 'ResponseId', 'IPAddress', 'RecipientEmail', 'Q1']).answers).toEqual([{ col: 4, section: 'behavior' }])
+  })
+
+  it('uses the question-text row of a Qualtrics export as the headers', () => {
+    const q = parseCsv('StartDate,Q1\nStart Date,How do you get to campus?\n"{""ImportId"":""startDate""}","{""ImportId"":""QID1""}"\n2026-11-03,Bus\n')
+    expect(qualtricsHeaders(q.headers, q.rows)).toEqual({ headers: ['Start Date', 'How do you get to campus?'], rows: [['2026-11-03', 'Bus']] })
+    expect(qualtricsHeaders(csv.headers, csv.rows).rows).toBe(csv.rows) // other files pass through
+  })
+
+  it('matches contacts, reads dates, keeps questions in bold, and skips empty rows', () => {
+    const db = seeded()
+    const pat = saveContact(db, contact()) // pat@x.com
+    const kim = saveContact(db, contact({ name: 'Kim', email: '' }))
+    const plan = planSurveyImport(db, csv, { ...mapping, answers: [{ col: 3, section: 'behavior' }, { col: 4, section: 'pains' }] })
+    expect(plan.rows.map((r) => [r.contact, r.interview.date])).toEqual([
+      [pat.id, '2026-11-03'],
+      [kim.id, '2026-11-04'],
+      [{ new: 0 }, '2026-11-06'],
+      [kim.id, '2026-11-06']
+    ])
+    expect(plan.contacts).toEqual([expect.objectContaining({ name: 'New Person', email: 'new@x.com' })])
+    expect(plan.rows[1].interview.notes.pains).toBe('<p><strong>What is hardest about it?</strong></p><p>Late buses</p><p>and no shelter</p>')
+    expect(plan.rows[0].interview).toMatchObject({ format: 'written', type: 'validation', notes: { solutions: '' } })
+    expect(plan).toMatchObject({ empty: 1, duplicates: 0, invalid: [{ row: 5, message: expect.stringMatching(/date/i) }] })
+  })
+
+  it('adds the interviews and new contacts, and skips them when the same file is imported again', () => {
+    const db = seeded()
+    const plan = planSurveyImport(db, csv, { ...mapping, date: 0 })
+    expect(applySurveyImport(db, plan)).toEqual({ interviews: 4, contacts: 3 })
+    const people = listContacts(db)
+    expect(people.map((c) => c.name)).toEqual(['pat@x.com', 'Kim', 'New Person'])
+    expect(people.every((c) => c.stage === 'interviewed')).toBe(true)
+    const again = planSurveyImport(db, csv, mapping)
+    expect(again).toMatchObject({ rows: [], duplicates: 4 })
+  })
+
+  it('puts answers mapped to quotes in the quotes field and refuses a column past the end', () => {
+    const plan = planSurveyImport(seeded(), csv, { ...mapping, answers: [{ col: 4, section: 'quotes' }] })
+    expect(plan.rows[1].interview.quotes).toBe('Late buses\nand no shelter')
+    expect(() => planSurveyImport(seeded(), csv, { ...mapping, answers: [{ col: 9, section: 'pains' }] })).toThrow(/doesn't exist/)
   })
 })
 

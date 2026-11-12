@@ -1,9 +1,13 @@
+import { Search } from 'lucide-react'
 import { useCallback, useEffect, useState } from 'react'
-import type { ContactCsvFile, ImportPreview } from '../../shared/api'
+import type { ContactCsvFile, ImportPreview, SurveyCsvFile } from '../../shared/api'
+import type { SearchHit } from '../../shared/search'
 import type { Profile, VentureBundle } from '../../shared/schema'
 import { AboutDialog } from '@/components/AboutDialog'
 import { ContactImportDialog } from '@/components/ContactImportDialog'
 import { ImportPreviewDialog } from '@/components/ImportPreviewDialog'
+import { SearchDialog } from '@/components/SearchDialog'
+import { SurveyImportDialog } from '@/components/SurveyImportDialog'
 import { Sidebar, type Screen } from '@/components/Sidebar'
 import { StatusRegion, type Status } from '@/components/StatusRegion'
 import { Button } from '@/components/ui/button'
@@ -35,6 +39,10 @@ export default function App() {
   const [aboutOpen, setAboutOpen] = useState(false)
   const [preview, setPreview] = useState<ImportPreview | null>(null)
   const [csvFile, setCsvFile] = useState<ContactCsvFile | null>(null)
+  const [surveyFile, setSurveyFile] = useState<SurveyCsvFile | null>(null)
+  const [searching, setSearching] = useState(false)
+  // A contact picked in search, for the Contacts screen to open once it has loaded.
+  const [openContactId, setOpenContactId] = useState<string | null>(null)
   const [unsaved, setUnsaved] = useState(false)
   // The interview being edited (id null = new); `n` gives each open a fresh editor.
   const [editing, setEditing] = useState<{ id: string | null; n: number } | null>(null)
@@ -62,6 +70,14 @@ export default function App() {
     try {
       const r = await api.pickContactsCsv()
       if ('token' in r) setCsvFile(r)
+    } catch (err) {
+      onError(err)
+    }
+  }, [onError])
+  const importSurveys = useCallback(async () => {
+    try {
+      const r = await api.pickSurveyCsv()
+      if ('token' in r) setSurveyFile(r)
     } catch (err) {
       onError(err)
     }
@@ -113,9 +129,15 @@ export default function App() {
         case 'import-contacts':
           void importContacts()
           break
+        case 'import-surveys':
+          void importSurveys()
+          break
+        case 'search':
+          setSearching(true)
+          break
       }
     })
-  }, [load, notify, openInterview, importContacts])
+  }, [load, notify, openInterview, importContacts, importSurveys])
 
   // The venture form and the interview editor report unsaved edits; ask before leaving them.
   // Closing the window is caught here; main asks the user (will-prevent-unload).
@@ -133,6 +155,14 @@ export default function App() {
     setScreen(next)
   }
   const toastSuccess = useCallback((m: string) => notify('success', m), [notify])
+  const contactOpened = useCallback(() => setOpenContactId(null), [])
+  /** Opens what a search result points at: its interview where there is one, otherwise its screen. */
+  const openHit = (hit: SearchHit) => {
+    setSearching(false)
+    if (hit.interviewId) return openInterview(hit.interviewId)
+    if (hit.kind === 'contacts') setOpenContactId(hit.id)
+    navigate(hit.kind === 'contacts' ? 'contacts' : hit.kind === 'insights' ? 'insights' : 'hypotheses')
+  }
   const closeEditor = useCallback(() => setEditing(null), [])
   const pickImport = async () => {
     try {
@@ -174,6 +204,22 @@ export default function App() {
           onError={onError}
         />
       )}
+      {surveyFile && (
+        <SurveyImportDialog
+          key={surveyFile.token}
+          file={surveyFile}
+          onClose={() => setSurveyFile(null)}
+          onDone={({ interviews, contacts }) => {
+            setSurveyFile(null)
+            notify(
+              'success',
+              `Imported ${interviews} ${interviews === 1 ? 'interview' : 'interviews'}${contacts ? ` and ${contacts} new ${contacts === 1 ? 'contact' : 'contacts'}` : ''}`
+            )
+          }}
+          onError={onError}
+        />
+      )}
+      {searching && venture && <SearchDialog onOpen={openHit} onClose={() => setSearching(false)} onError={onError} />}
       <StatusRegion status={status} onDismiss={dismiss} />
     </>
   )
@@ -215,6 +261,11 @@ export default function App() {
       <div className="flex min-w-0 flex-1 flex-col">
         <header className="flex h-16 shrink-0 items-center gap-4 border-b border-border bg-card px-6">
           <h1 className="font-heading text-2xl font-semibold">{TITLES[screen]}</h1>
+          <Button variant="ghost" className="ml-auto" onClick={() => setSearching(true)} aria-keyshortcuts="Control+K Meta+K">
+            <Search aria-hidden strokeWidth={1.5} />
+            Search
+            <kbd className="rounded-sm border border-border px-1.5 text-[13px] text-muted-foreground">Ctrl+K</kbd>
+          </Button>
         </header>
         <main id="main" tabIndex={-1} className="relative flex-1 scroll-pb-24 overflow-auto">
           <div className="mx-auto max-w-[1280px] p-6">
@@ -224,6 +275,8 @@ export default function App() {
               <Contacts
                 key={loads}
                 segments={venture.segments}
+                openId={openContactId}
+                onOpened={contactOpened}
                 onOpenInterview={openInterview}
                 onNotify={toastSuccess}
                 onError={onError}
@@ -260,7 +313,15 @@ export default function App() {
                 onError={onError}
               />
             ) : screen === 'interviews' ? (
-              <Interviews key={loads} onOpen={openInterview} onNotify={toastSuccess} onDirtyChange={setUnsaved} confirmLeave={confirmLeave} onError={onError} />
+              <Interviews
+                key={loads}
+                onOpen={openInterview}
+                onImportSurveys={importSurveys}
+                onNotify={toastSuccess}
+                onDirtyChange={setUnsaved}
+                confirmLeave={confirmLeave}
+                onError={onError}
+              />
             ) : (
               <VentureOverview
                 key={`${loads}-${venture.venture.updated_at}`}

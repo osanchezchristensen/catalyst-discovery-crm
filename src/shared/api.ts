@@ -3,6 +3,8 @@ import type {
   Attachment,
   ContactField,
   ContactImportRequest,
+  SurveyImportRequest,
+  SurveyMapping,
   Thresholds,
   TagRenameInput,
   Contact,
@@ -53,6 +55,15 @@ export type ContactCsvFile = {
 }
 export type ContactImportPreview = { add: number; duplicates: number; noName: number; invalid: { row: number; message: string }[] }
 
+export type SurveyCsvFile = { token: string; fileName: string; headers: string[]; sample: string[][]; rowCount: number; mapping: SurveyMapping }
+export type SurveyImportPreview = {
+  interviews: number
+  newContacts: number
+  empty: number
+  duplicates: number
+  invalid: { row: number; message: string }[]
+}
+
 export type StatusTone = 'success' | 'error'
 export type AppEvent =
   | { type: 'about' }
@@ -61,6 +72,8 @@ export type AppEvent =
   | { type: 'data-changed' }
   | { type: 'log-interview' }
   | { type: 'import-contacts' }
+  | { type: 'import-surveys' }
+  | { type: 'search' }
 
 export interface InvokeApi {
   getAppInfo(): Promise<AppInfo>
@@ -104,6 +117,10 @@ export interface InvokeApi {
   exportWorkspace(opts?: { includeContactDetails: boolean }): Promise<{ path: string } | Canceled>
   exportCsv(opts: { includeContactDetails: boolean }): Promise<{ path: string } | Canceled>
   pickContactsCsv(): Promise<ContactCsvFile | Canceled>
+  pickSurveyCsv(): Promise<SurveyCsvFile | Canceled>
+  previewSurveyImport(req: SurveyImportRequest): Promise<SurveyImportPreview>
+  applySurveyImport(req: SurveyImportRequest): Promise<{ interviews: number; contacts: number }>
+  cancelSurveyImport(token: string): Promise<void>
   previewContactImport(req: ContactImportRequest): Promise<ContactImportPreview>
   applyContactImport(req: ContactImportRequest): Promise<{ added: number }>
   cancelContactImport(token: string): Promise<void>
@@ -161,6 +178,10 @@ export const INVOKE_CHANNELS = [
   'exportWorkspace',
   'exportCsv',
   'pickContactsCsv',
+  'pickSurveyCsv',
+  'previewSurveyImport',
+  'applySurveyImport',
+  'cancelSurveyImport',
   'previewContactImport',
   'applyContactImport',
   'cancelContactImport',

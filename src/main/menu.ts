@@ -50,6 +50,7 @@ export function buildMenu(ctx: Ctx, actions: Actions, isDev: boolean): Menu {
             })
         },
         { label: 'Import Contacts from CSV…', click: () => ctx.send({ type: 'import-contacts' }) },
+        { label: 'Import Survey Answers from CSV…', click: () => ctx.send({ type: 'import-surveys' }) },
         { type: 'separator' },
         { label: 'Back Up Now', click: () => run(() => (actions.backupNow(undefined), 'Backup saved')) },
         { label: 'Open Data Folder', click: () => run(async () => (await actions.openDataFolder(undefined), null)) },
@@ -61,6 +62,8 @@ export function buildMenu(ctx: Ctx, actions: Actions, isDev: boolean): Menu {
     {
       label: 'View',
       submenu: [
+        { label: 'Search Everything…', accelerator: 'CmdOrCtrl+K', click: () => ctx.send({ type: 'search' }) },
+        { type: 'separator' },
         { role: 'resetZoom' },
         { role: 'zoomIn' },
         { role: 'zoomOut' },

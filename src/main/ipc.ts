@@ -26,6 +26,7 @@ import {
   ventureCreateInput,
   versionInput,
   weeklyGoalInput,
+  surveyImportRequest,
   type WorkspaceFile
 } from '../shared/schema'
 import { backupNow } from './backup'
@@ -33,15 +34,19 @@ import { CsvError, decodeCsv, MAX_CSV_BYTES, parseCsv } from './csv'
 import {
   addAttachment,
   applyContactImport,
+  applySurveyImport,
   ATTACHMENT_TYPES,
   attachmentPath,
   deleteAttachment,
   exportCsv,
   listAttachments,
   planContactImport,
+  planSurveyImport,
+  qualtricsHeaders,
   removeInterviewFiles,
   resetWorkspace,
-  suggestMapping
+  suggestMapping,
+  suggestSurveyMapping
 } from './data-tools'
 import { today } from '../shared/dates'
 import * as repo from './db/repo'
@@ -75,10 +80,26 @@ const slug = (s: string) => s.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(
 export function createActions(ctx: Ctx): Actions {
   const { db } = ctx
   let pending: { token: string; file: WorkspaceFile } | null = null
-  let pendingCsv: { token: string; rows: string[][] } | null = null
-  const csvRows = (token: string) => {
+  // One CSV waits for its preview and apply at a time; the renderer only ever holds the token.
+  let pendingCsv: { token: string; headers: string[]; rows: string[][] } | null = null
+  const csvFile = (token: string) => {
     if (!pendingCsv || pendingCsv.token !== token) throw new Error('That import expired. Choose the file again.')
-    return pendingCsv.rows
+    return pendingCsv
+  }
+  const csvRows = (token: string) => csvFile(token).rows
+  /** Picks and parses a CSV, keeps it under a new token, and returns what the preview dialog needs. */
+  const pickCsv = async (title: string, emptyMessage: string, adapt = (h: string[], r: string[][]) => ({ headers: h, rows: r })) => {
+    const options = { title, properties: ['openFile' as const], filters: [{ name: 'CSV file', extensions: ['csv'] }] }
+    const parent = ctx.getWindow() ?? undefined
+    const r = parent ? await dialog.showOpenDialog(parent, options) : await dialog.showOpenDialog(options)
+    if (r.canceled || !r.filePaths[0]) return null
+    const path = r.filePaths[0]
+    if ((await stat(path)).size > MAX_CSV_BYTES) throw new CsvError('That file is larger than 5 MB.')
+    const parsed = parseCsv(decodeCsv(await readFile(path)))
+    const { headers, rows } = adapt(parsed.headers, parsed.rows)
+    if (!rows.length) throw new CsvError(emptyMessage)
+    pendingCsv = { token: randomUUID(), headers, rows }
+    return { token: pendingCsv.token, fileName: basename(path), headers, sample: rows.slice(0, 3), rowCount: rows.length }
   }
   const dialogParent = () => ctx.getWindow() ?? undefined
 
@@ -167,16 +188,29 @@ export function createActions(ctx: Ctx): Actions {
       return { path: exportCsv(db, r.filePaths[0], { includeContactDetails: opts?.includeContactDetails ?? false, date: today() }) }
     },
     pickContactsCsv: async () => {
-      const options = { title: 'Import contacts from CSV', properties: ['openFile' as const], filters: [{ name: 'CSV file', extensions: ['csv'] }] }
-      const parent = dialogParent()
-      const r = parent ? await dialog.showOpenDialog(parent, options) : await dialog.showOpenDialog(options)
-      if (r.canceled || !r.filePaths[0]) return { canceled: true }
-      const path = r.filePaths[0]
-      if ((await stat(path)).size > MAX_CSV_BYTES) throw new CsvError('That file is larger than 5 MB.')
-      const { headers, rows } = parseCsv(decodeCsv(await readFile(path)))
-      if (!rows.length) throw new CsvError('That file has a header row but no contacts.')
-      pendingCsv = { token: randomUUID(), rows }
-      return { token: pendingCsv.token, fileName: basename(path), headers, sample: rows.slice(0, 3), rowCount: rows.length, mapping: suggestMapping(headers) }
+      const f = await pickCsv('Import contacts from CSV', 'That file has a header row but no contacts.')
+      return f ? { ...f, mapping: suggestMapping(f.headers) } : { canceled: true }
+    },
+    pickSurveyCsv: async () => {
+      const f = await pickCsv('Import survey answers from CSV', 'That file has a header row but no answers.', qualtricsHeaders)
+      return f ? { ...f, mapping: suggestSurveyMapping(f.headers) } : { canceled: true }
+    },
+    previewSurveyImport: (arg) => {
+      const req = parse(surveyImportRequest, arg)
+      const plan = planSurveyImport(db, csvFile(req.token), req.mapping)
+      return { interviews: plan.rows.length, newContacts: plan.contacts.length, empty: plan.empty, duplicates: plan.duplicates, invalid: plan.invalid.slice(0, 5) }
+    },
+    applySurveyImport: (arg) => {
+      const req = parse(surveyImportRequest, arg)
+      const plan = planSurveyImport(db, csvFile(req.token), req.mapping)
+      backupNow(db, ctx.backupsDir, new Date(), 'pre-import')
+      const result = applySurveyImport(db, plan)
+      pendingCsv = null
+      ctx.send({ type: 'data-changed' })
+      return result
+    },
+    cancelSurveyImport: (arg) => {
+      if (pendingCsv?.token === arg) pendingCsv = null
     },
     previewContactImport: (arg) => {
       const req = parse(contactImportRequest, arg)

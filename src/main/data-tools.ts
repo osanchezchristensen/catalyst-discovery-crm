@@ -1,5 +1,6 @@
 // Settings-screen data tools: CSV export, contact CSV import, interview attachments, and reset.
 import type Database from 'better-sqlite3'
+import type { z } from 'zod'
 import { randomUUID } from 'node:crypto'
 import { createWriteStream, existsSync, mkdirSync, rmSync, writeFileSync } from 'node:fs'
 import { open, rename, rm } from 'node:fs/promises'
@@ -9,17 +10,20 @@ import { pipeline } from 'node:stream/promises'
 import {
   CONTACT_FIELDS,
   contactInput,
+  interviewInput,
   WORKSPACE_TABLE_NAMES,
   workspaceTables,
   type Attachment,
   type ContactField,
   type ContactInput,
-  type ContactMapping
+  type ContactMapping,
+  type SurveyMapping
 } from '../shared/schema'
 import { backupBeforeReset } from './backup'
-import { noteToPlain } from '../shared/notes'
+import { noteToPlain, plainToHtml } from '../shared/notes'
+import { today } from '../shared/dates'
 import { toCsv } from './csv'
-import { activeVentureId, getActiveVenture, listContacts, saveContact } from './db/repo'
+import { activeVentureId, getActiveVenture, listContacts, saveContact, saveInterview } from './db/repo'
 import { exportWorkspace } from './workspace'
 
 type DB = Database.Database
@@ -151,6 +155,150 @@ export function applyContactImport(db: DB, plan: ContactImportPlan): number {
     for (const c of plan.add) saveContact(db, contactInput.parse(c))
   })()
   return plan.add.length
+}
+
+// ---- Survey CSV import (backlog #8) ----
+
+const norm = (h: string) => h.toLowerCase().replace(/[^a-z0-9]+/g, '')
+const SURVEY_IDENTITY = {
+  name: [...SYNONYMS.name, 'your name', 'respondent', 'respondent name'],
+  email: [...SYNONYMS.email, 'recipient email', 'your email'],
+  date: ['timestamp', 'date', 'submitted', 'submitted at', 'recorded date', 'end date', 'start date', 'completion time']
+}
+// Columns Google Forms and Qualtrics add that are never answers.
+const SURVEY_METADATA = new Set(
+  ['response id', 'ip address', 'progress', 'duration (in seconds)', 'finished', 'status', 'recipient last name', 'recipient first name',
+    'external reference', 'location latitude', 'location longitude', 'distribution channel', 'user language', 'score', 'id']
+    .map(norm)
+)
+
+/** Guesses name, email and date columns; every other non-metadata column is offered as an answer. */
+export function suggestSurveyMapping(headers: string[]): SurveyMapping {
+  const cols = headers.map(norm)
+  const find = (syns: string[]) => {
+    const i = cols.findIndex((h) => syns.some((s) => norm(s) === h))
+    return i >= 0 ? i : null
+  }
+  const name = find(SURVEY_IDENTITY.name)
+  const email = find(SURVEY_IDENTITY.email)
+  const date = find(SURVEY_IDENTITY.date)
+  const taken = new Set([name, email, date])
+  const isMeta = (h: string) => SURVEY_METADATA.has(h) || Object.values(SURVEY_IDENTITY).some((syns) => syns.some((s) => norm(s) === h))
+  const answers = headers.flatMap((_, i) => (taken.has(i) || isMeta(cols[i]) ? [] : [{ col: i, section: 'behavior' as const }]))
+  return { name, email, date, type: 'validation', answers }
+}
+
+/**
+ * Qualtrics exports three header rows: short ids, the question text, then {"ImportId":…}. Use the question text
+ * as the headers and drop the two extra rows. Any other file passes through unchanged.
+ */
+export function qualtricsHeaders(headers: string[], rows: string[][]): { headers: string[]; rows: string[][] } {
+  if (rows.length >= 2 && rows[1].some((c) => c.trim().startsWith('{"ImportId"'))) return { headers: rows[0], rows: rows.slice(2) }
+  return { headers, rows }
+}
+
+/** ISO (2026-11-03, with or without a time) or US month/day/year as Google Forms writes it. */
+function surveyDate(text: string): string | null {
+  const iso = /^(\d{4})-(\d{1,2})-(\d{1,2})/.exec(text.trim())
+  const us = /^(\d{1,2})\/(\d{1,2})\/(\d{4})/.exec(text.trim())
+  const parts = iso ? [iso[1], iso[2], iso[3]] : us ? [us[3], us[1], us[2]] : null
+  if (!parts) return null
+  const [y, m, d] = parts
+  const out = `${y}-${m.padStart(2, '0')}-${d.padStart(2, '0')}`
+  const check = new Date(`${out}T00:00:00Z`)
+  return !isNaN(check.getTime()) && check.toISOString().startsWith(out) ? out : null // rejects 2026-02-31
+}
+
+/** An existing contact id, a contact this import creates (index into `contacts`), or no contact. */
+export type SurveyContact = string | { new: number } | null
+export type SurveyImportPlan = {
+  contacts: ContactInput[]
+  rows: { contact: SurveyContact; interview: z.output<typeof interviewInput> }[]
+  empty: number
+  duplicates: number
+  invalid: { row: number; message: string }[]
+}
+
+const escapeHtml = (s: string) => s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
+
+/**
+ * Turns survey rows into Written response interviews. Contacts are matched by email, then by name; unknown people
+ * become new contacts. A row is skipped as already imported when that person already has a Written response on that
+ * date, so importing the same file twice adds nothing the second time.
+ */
+export function planSurveyImport(db: DB, { headers, rows }: { headers: string[]; rows: string[][] }, mapping: SurveyMapping): SurveyImportPlan {
+  const width = rows[0]?.length ?? 0
+  for (const c of [mapping.name, mapping.email, mapping.date, ...mapping.answers.map((a) => a.col)]) {
+    if (c !== null && c >= width) throw new Error("A column picked for the survey doesn't exist in this file.")
+  }
+  const v = activeVentureId(db)
+  const existing = listContacts(db)
+  const byEmail = new Map<string, SurveyContact>(existing.filter((c) => c.email.trim()).map((c) => [c.email.trim().toLowerCase(), c.id]))
+  const byName = new Map<string, SurveyContact>(existing.map((c) => [c.name.trim().toLowerCase(), c.id]))
+  const done = new Set(
+    (db.prepare("SELECT contact_id, date FROM interviews WHERE venture_id = ? AND format = 'written' AND contact_id IS NOT NULL").all(v) as {
+      contact_id: string
+      date: string
+    }[]).map((r) => `${r.contact_id}|${r.date}`)
+  )
+  const plan: SurveyImportPlan = { contacts: [], rows: [], empty: 0, duplicates: 0, invalid: [] }
+  const cell = (row: string[], c: number | null) => (c === null ? '' : (row[c] ?? '').trim())
+
+  rows.forEach((row, k) => {
+    const answers = mapping.answers.map((a) => ({ ...a, text: cell(row, a.col) })).filter((a) => a.text)
+    if (!answers.length) return void plan.empty++
+    const date = mapping.date === null ? today() : surveyDate(cell(row, mapping.date))
+    if (!date) return void plan.invalid.push({ row: k + 2, message: `The date “${cell(row, mapping.date)}” wasn’t understood. Use 2026-11-03 or 11/3/2026.` })
+
+    const name = cell(row, mapping.name)
+    const email = cell(row, mapping.email).toLowerCase()
+    let contact: SurveyContact = (email && byEmail.get(email)) || (name && byName.get(name.toLowerCase())) || null
+    if (!contact && (name || email)) {
+      const input: ContactInput = {
+        segment_id: null, name: name || email, email, phone: '', role: '', organization: '', source: null, stage: 'identified',
+        tags: [], consent_followup: false, notes: ''
+      }
+      const parsed = contactInput.safeParse(input)
+      if (!parsed.success) return void plan.invalid.push({ row: k + 2, message: `${parsed.error.issues[0].path.join('.')}: ${parsed.error.issues[0].message}` })
+      contact = { new: plan.contacts.push(input) - 1 }
+      // Later rows from the same person reuse this new contact.
+      if (email) byEmail.set(email, contact)
+      if (name) byName.set(name.toLowerCase(), contact)
+    }
+
+    const dupKey = `${typeof contact === 'string' ? contact : contact ? `new:${contact.new}` : ''}|${date}`
+    if (contact && done.has(dupKey)) return void plan.duplicates++
+
+    const notes = { behavior: '', pains: '', solutions: '', budget: '' }
+    const quotes: string[] = []
+    for (const a of answers) {
+      if (a.section === 'quotes') quotes.push(a.text)
+      else notes[a.section] += `<p><strong>${escapeHtml(headers[a.col] ?? '')}</strong></p>${plainToHtml(a.text)}`
+    }
+    const parsed = interviewInput.safeParse({
+      contact_id: null, date, type: mapping.type, format: 'written', interviewers: [], notes, quotes: quotes.join('\n'),
+      pain_score: null, wtp_signal: '', next_step: '', follow_up_date: null, evidence: []
+    })
+    if (!parsed.success) {
+      const issue = parsed.error.issues[0]
+      return void plan.invalid.push({ row: k + 2, message: `${issue.path.join('.')}: ${issue.message}` })
+    }
+    if (contact) done.add(dupKey)
+    plan.rows.push({ contact, interview: parsed.data })
+  })
+  return plan
+}
+
+/** Adds a plan's new contacts and interviews in one transaction; logging an interview moves its contact to Interviewed. */
+export function applySurveyImport(db: DB, plan: SurveyImportPlan): { interviews: number; contacts: number } {
+  db.transaction(() => {
+    const ids = plan.contacts.map((c) => saveContact(db, contactInput.parse(c)).id)
+    for (const { contact, interview } of plan.rows) {
+      const contact_id = contact === null ? null : typeof contact === 'string' ? contact : ids[contact.new]
+      saveInterview(db, { ...interview, contact_id })
+    }
+  })()
+  return { interviews: plan.rows.length, contacts: plan.contacts.length }
 }
 
 // ---- Attachments (F15) ----
