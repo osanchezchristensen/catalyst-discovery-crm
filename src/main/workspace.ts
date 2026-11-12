@@ -121,10 +121,17 @@ export function applyImport(db: DB, file: WorkspaceFile): Counts {
         const rows = file.tables[t] as Row[]
         if (!rows.length) continue
         const cols = columns(t)
-        const insert = db.prepare(`INSERT INTO ${t} (${cols.join(', ')}) VALUES (${cols.map((c) => `@${c}`).join(', ')})`)
+        // Interviews from files older than v5 have no type (null): new rows become Validation, existing rows keep theirs.
+        const untyped = (c: string) => t === 'interviews' && c === 'type'
+        const value = (c: string) => (untyped(c) ? `COALESCE(@${c}, 'validation')` : `@${c}`)
+        const insert = db.prepare(`INSERT INTO ${t} (${cols.join(', ')}) VALUES (${cols.map(value).join(', ')})`)
         // Exports blank contact email/phone by default; a blank incoming value must not wipe the local one.
         const set = (c: string) =>
-          t === 'contacts' && (c === 'email' || c === 'phone') ? `${c} = CASE WHEN @${c} = '' THEN ${c} ELSE @${c} END` : `${c} = @${c}`
+          t === 'contacts' && (c === 'email' || c === 'phone')
+            ? `${c} = CASE WHEN @${c} = '' THEN ${c} ELSE @${c} END`
+            : untyped(c)
+              ? `${c} = COALESCE(@${c}, ${c})`
+              : `${c} = @${c}`
         const update = db.prepare(`UPDATE ${t} SET ${cols.map(set).join(', ')} WHERE id = @id`)
         const classify = classifier(db, t)
         const c = { added: 0, updated: 0, unchanged: 0 }

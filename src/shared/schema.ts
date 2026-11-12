@@ -67,8 +67,8 @@ export const workspaceTables = {
   }),
   interviews: z.object({
     id, venture_id: id, contact_id: id.nullable(), date,
-    // Files exported before migration v5 have no type; the migration made existing interviews Validation too.
-    type: z.enum(INTERVIEW_TYPES).default('validation'), format: z.enum(INTERVIEW_FORMATS), interviewers: jsonText,
+    // Files exported before migration v5 have no type: null here; import keeps the local type or falls back to Validation.
+    type: z.enum(INTERVIEW_TYPES).nullable().default(null), format: z.enum(INTERVIEW_FORMATS), interviewers: jsonText,
     notes: jsonText, quotes: long, pain_score: z.int().min(1).max(5).nullable(), wtp_signal: short,
     next_step: long, follow_up_date: date.nullable(), ...stamps
   }),
@@ -263,7 +263,8 @@ export type InterviewNotes = z.infer<typeof interviewNotes>
 export type InterviewInput = z.input<typeof interviewInput>
 type InterviewRow = z.infer<(typeof workspaceTables)['interviews']>
 export type EvidenceItem = z.infer<typeof evidenceItem>
-export type Interview = Omit<InterviewRow, 'interviewers' | 'notes'> & {
+export type Interview = Omit<InterviewRow, 'type' | 'interviewers' | 'notes'> & {
+  type: InterviewType
   interviewers: string[]
   notes: InterviewNotes
   contact_name: string | null

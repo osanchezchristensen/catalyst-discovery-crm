@@ -117,6 +117,9 @@ if (!app.requestSingleInstanceLock()) {
 
   void app.whenReady().then(() => {
     session.defaultSession.setPermissionRequestHandler((_wc, _permission, callback) => callback(false))
+    // On Windows, Chromium can fetch Hunspell dictionaries for languages the OS checker lacks. Point that at a dead
+    // local port so it never leaves the machine; the OS spell checker keeps working.
+    session.defaultSession.setSpellCheckerDictionaryDownloadURL('http://127.0.0.1:9/')
     session.defaultSession.setPermissionCheckHandler(() => false)
 
     restrictDataFolder(dataDir) // before the database, backups or attachments are written

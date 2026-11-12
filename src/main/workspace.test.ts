@@ -170,6 +170,23 @@ describe('import merge', () => {
     expect(listInterviews(target)[0].type).toBe('validation')
   })
 
+  it('keeps the local interview type when a newer file from v0.9 updates the interview', () => {
+    const { db } = seeded()
+    saveInterview(db, interviewInput.parse({
+      contact_id: null, date: '2026-11-03', type: 'informational', format: 'video', interviewers: [], quotes: '', pain_score: null,
+      wtp_signal: '', next_step: '', follow_up_date: null, notes: { behavior: '', pains: '', solutions: '', budget: '' }
+    }))
+    const target = testDb()
+    applyImport(target, roundTrip(exportWorkspace(db, opts)))
+    const old = JSON.parse(JSON.stringify(exportWorkspace(db, opts)))
+    delete old.tables.interviews[0].type
+    old.tables.interviews[0].quotes = 'Edited on v0.9'
+    old.tables.interviews[0].updated_at = new Date(Date.now() + 60_000).toISOString()
+    old.schema_version = 4
+    applyImport(target, roundTrip(old))
+    expect(listInterviews(target)[0]).toMatchObject({ type: 'informational', quotes: 'Edited on v0.9' })
+  })
+
   it('rolls back everything when a row points at a missing parent', () => {
     const { db } = seeded()
     const file = roundTrip(exportWorkspace(db, opts))
