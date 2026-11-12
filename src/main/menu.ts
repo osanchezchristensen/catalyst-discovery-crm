@@ -49,6 +49,7 @@ export function buildMenu(ctx: Ctx, actions: Actions, isDev: boolean): Menu {
               return 'path' in r ? `CSV files saved in ${r.path}` : null
             })
         },
+        { label: 'Summary PDF…', click: () => ctx.send({ type: 'summary' }) },
         { label: 'Import Contacts from CSV…', click: () => ctx.send({ type: 'import-contacts' }) },
         { label: 'Import Survey Answers from CSV…', click: () => ctx.send({ type: 'import-surveys' }) },
         { type: 'separator' },

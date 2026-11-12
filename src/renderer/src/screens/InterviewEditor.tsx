@@ -13,7 +13,8 @@ import {
   type Hypothesis,
   type Interview,
   type InterviewInput,
-  type InterviewType
+  type InterviewType,
+  type TrashRef
 } from '../../../shared/schema'
 import { noteToPlain } from '../../../shared/notes'
 import { SelectField, TextAreaField, TextField } from '@/components/Field'
@@ -65,6 +66,7 @@ export function InterviewEditor({
   onBack,
   onDirtyChange,
   onNotify,
+  onTrashed,
   onError
 }: {
   id: string | null
@@ -72,6 +74,7 @@ export function InterviewEditor({
   onBack: () => void
   onDirtyChange: (dirty: boolean) => void
   onNotify: (message: string) => void
+  onTrashed: (ref: TrashRef, label: string) => void
   onError: (err: unknown) => void
 }) {
   const [draft, setDraft] = useState<InterviewDraft | null>(initialId ? null : blankInterview)
@@ -245,11 +248,11 @@ export function InterviewEditor({
   }
 
   const remove = async () => {
-    if (!id || !window.confirm("Delete this interview? This can't be undone.")) return
+    if (!id || !window.confirm('Move this interview to Trash? You can restore it from Settings for 30 days.')) return
     try {
       await window.api.deleteInterview(id)
       onDirtyChange(false)
-      onNotify('Interview deleted')
+      onTrashed({ kind: 'interview', id }, 'Interview')
       onBack()
     } catch (err) {
       onError(err)

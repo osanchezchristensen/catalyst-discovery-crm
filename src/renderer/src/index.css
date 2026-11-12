@@ -79,4 +79,14 @@
     list-style: decimal;
     padding-left: 1.5rem;
   }
+  /* Summary PDF (printToPDF): only the print-only summary sheet is printed, edge to edge; it has its own margins. */
+  @media print {
+    @page {
+      size: letter;
+      margin: 0;
+    }
+    body > :not(.print-sheet) {
+      display: none !important;
+    }
+  }
 }

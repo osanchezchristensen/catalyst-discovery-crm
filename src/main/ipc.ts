@@ -27,6 +27,7 @@ import {
   versionInput,
   weeklyGoalInput,
   surveyImportRequest,
+  trashRefInput,
   type WorkspaceFile
 } from '../shared/schema'
 import { backupNow } from './backup'
@@ -126,12 +127,14 @@ export function createActions(ctx: Ctx): Actions {
     listInterviews: () => repo.listInterviews(db),
     getInterview: (arg) => repo.getInterview(db, parse(idInput, arg)),
     saveInterview: (arg) => repo.saveInterview(db, parse(interviewInput, arg)),
-    deleteInterview: async (arg) => {
-      const id = parse(idInput, arg)
-      // Only touch files for an interview that belongs to the open venture.
-      if (!repo.getInterview(db, id)) return
-      repo.deleteInterview(db, id)
-      await removeInterviewFiles(ctx.attachmentsDir, id)
+    // Attachment files stay while the interview is in Trash; deleteForever and the startup purge remove them.
+    deleteInterview: (arg) => repo.deleteInterview(db, parse(idInput, arg)),
+    listTrash: () => repo.listTrash(db),
+    restoreFromTrash: (arg) => repo.restoreFromTrash(db, parse(trashRefInput, arg)),
+    deleteForever: async (arg) => {
+      const ref = parse(trashRefInput, arg)
+      repo.deleteForever(db, ref) // throws unless the row is in this venture's Trash, so files are only touched then
+      if (ref.kind === 'interview') await removeInterviewFiles(ctx.attachmentsDir, ref.id)
     },
     listHypotheses: (arg) => repo.listHypotheses(db, parse(versionInput, arg)),
     listHypothesisVersions: () => repo.listHypothesisVersions(db),
@@ -186,6 +189,22 @@ export function createActions(ctx: Ctx): Actions {
       const r = parent ? await dialog.showOpenDialog(parent, options) : await dialog.showOpenDialog(options)
       if (r.canceled || !r.filePaths[0]) return { canceled: true }
       return { path: exportCsv(db, r.filePaths[0], { includeContactDetails: opts?.includeContactDetails ?? false, date: today() }) }
+    },
+    saveSummaryPdf: async () => {
+      const win = ctx.getWindow()
+      if (!win) throw new Error('Open the app window first.')
+      const venture = repo.getActiveVenture(db)?.venture.name ?? 'venture'
+      const options = {
+        title: 'Save summary PDF',
+        defaultPath: join(app.getPath('documents'), `${slug(venture)}-summary-${today()}.pdf`),
+        filters: [{ name: 'PDF', extensions: ['pdf'] }]
+      }
+      const r = await dialog.showSaveDialog(win, options)
+      if (r.canceled || !r.filePath) return { canceled: true }
+      // Print CSS shows only the renderer's summary sheet, which sets its own page margins.
+      const pdf = await win.webContents.printToPDF({ pageSize: 'Letter', printBackground: true, margins: { top: 0, bottom: 0, left: 0, right: 0 } })
+      await writeFile(r.filePath, pdf)
+      return { path: r.filePath }
     },
     pickContactsCsv: async () => {
       const f = await pickCsv('Import contacts from CSV', 'That file has a header row but no contacts.')

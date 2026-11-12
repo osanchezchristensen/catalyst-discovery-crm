@@ -66,6 +66,7 @@ export function parseWorkspace(text: string): WorkspaceFile {
     for (const row of rows) {
       if (row.updated_at > nowIso) row.updated_at = nowIso
       if ((row.created_at as string) > nowIso) row.created_at = nowIso
+      if (typeof row.deleted_at === 'string' && row.deleted_at > nowIso) row.deleted_at = nowIso // else it never purges
     }
   }
   return result.data

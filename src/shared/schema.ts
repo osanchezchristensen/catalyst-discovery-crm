@@ -67,7 +67,9 @@ export const workspaceTables = {
     organization: short, source: z.enum(CONTACT_SOURCES).nullable(), stage: z.enum(CONTACT_STAGES),
     tags: jsonText, consent_followup: bool, notes: long,
     // Files exported before migration v7 have no referrer.
-    referred_by: id.nullable().default(null), ...stamps
+    referred_by: id.nullable().default(null),
+    // In Trash since then (ADR 0007). Files exported before migration v8 have none.
+    deleted_at: ts.nullable().default(null), ...stamps
   }),
   interviews: z.object({
     id, venture_id: id, contact_id: id.nullable(), date,
@@ -75,7 +77,7 @@ export const workspaceTables = {
     type: z.enum(INTERVIEW_TYPES).nullable().default(null), format: z.enum(INTERVIEW_FORMATS), interviewers: jsonText,
     // Four HTML notes of up to NOTE_MAX each, plus JSON keys and escaping.
     notes: z.string().max(4 * NOTE_MAX + 10_000).refine(isJson, 'Must be valid JSON'), quotes: long, pain_score: z.int().min(1).max(5).nullable(), wtp_signal: short,
-    next_step: long, follow_up_date: date.nullable(), ...stamps
+    next_step: long, follow_up_date: date.nullable(), deleted_at: ts.nullable().default(null), ...stamps
   }),
   hypotheses: z.object({
     id, venture_id: id, version: z.int().min(1), type: z.enum(HYPOTHESIS_TYPES), statement: long.min(1),
@@ -146,6 +148,9 @@ export const ventureBundleInput = z
 
 export const importToken = z.uuid()
 export const idInput = id
+/** Days a contact or interview stays in Trash before startup deletes it for good (ADR 0007). */
+export const TRASH_DAYS = 30
+export const trashRefInput = z.object({ kind: z.enum(['contact', 'interview']), id })
 
 const optionalEmail = z.union([z.email('Enter a valid email or leave it blank'), z.literal('')])
 const tagList = z.array(short.min(1)).max(30)
@@ -317,6 +322,9 @@ export type Decision = {
 }
 
 export type TaskInput = z.input<typeof taskInput>
+export type TrashRef = z.output<typeof trashRefInput>
+/** A contact or interview in Trash; `name` is the contact's, `date` is set for interviews. */
+export type TrashItem = TrashRef & { name: string | null; date: string | null; deleted_at: string }
 export type Task = { id: string; title: string; due_date: string | null; done: boolean; interview_id: string | null; created_at: string }
 export type Home = { goal: number; thisWeek: number; streak: number; tasks: Task[] }
 

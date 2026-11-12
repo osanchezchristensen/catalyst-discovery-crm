@@ -235,6 +235,10 @@ export const migrations: Migration[] = [
   },
   /* v7: who referred a contact (backlog #11, referral chains) */ `
   ALTER TABLE contacts ADD COLUMN referred_by TEXT REFERENCES contacts(id) ON DELETE SET NULL;
+  `,
+  /* v8: Trash (backlog #14, ADR 0007). A delete sets deleted_at; startup purges rows trashed more than 30 days ago. */ `
+  ALTER TABLE contacts ADD COLUMN deleted_at TEXT;
+  ALTER TABLE interviews ADD COLUMN deleted_at TEXT;
   `
 ]
 

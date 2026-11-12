@@ -133,6 +133,17 @@ describe('migrate', () => {
     expect(db.prepare("SELECT referred_by FROM contacts WHERE id = 'c2'").pluck().get()).toBeNull()
   })
 
+  it('v8 adds deleted_at to contacts and interviews and keeps their rows live', () => {
+    const db = fresh()
+    migrate(db, migrations.slice(0, 7))
+    db.prepare("INSERT INTO ventures (id, name, stage, created_at, updated_at) VALUES ('v1', 'Campus Eats', 1, 't', 't')").run()
+    db.prepare("INSERT INTO contacts (id, venture_id, name, created_at, updated_at) VALUES ('c1', 'v1', 'Pat', 't', 't')").run()
+    db.prepare("INSERT INTO interviews (id, venture_id, contact_id, date, format, created_at, updated_at) VALUES ('i1', 'v1', 'c1', '2026-11-03', 'video', 't', 't')").run()
+    migrate(db, migrations.slice(0, 8))
+    expect(db.prepare('SELECT name, deleted_at FROM contacts').all()).toEqual([{ name: 'Pat', deleted_at: null }])
+    expect(db.prepare('SELECT contact_id, deleted_at FROM interviews').all()).toEqual([{ contact_id: 'c1', deleted_at: null }])
+  })
+
   it('rolls back a failing function step and leaves the version unchanged', () => {
     const db = fresh()
     migrate(db)
