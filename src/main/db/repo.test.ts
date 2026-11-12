@@ -35,6 +35,7 @@ import {
   listInterviews,
   saveContact,
   saveInterview,
+  renameTag,
   saveProfile,
   saveVenture,
   setContactStage
@@ -160,6 +161,41 @@ describe('contacts', () => {
     expect(() => contact({ stage: 'won' })).toThrow()
     expect(() => contact({ email: 'not-an-email' })).toThrow()
     expect(() => interview({ pain_score: 6 })).toThrow()
+  })
+})
+
+describe('referrals', () => {
+  it('saves who referred a contact and refuses self, loops and other ventures', () => {
+    const db = testDb()
+    createVenture(db, base, 'Sam')
+    const pat = saveContact(db, contact())
+    const maya = saveContact(db, contact({ name: 'Maya', referred_by: pat.id }))
+    expect(maya.referred_by).toBe(pat.id)
+    expect(saveContact(db, contact({ name: 'Pat' })).referred_by).toBeNull() // default
+    expect(() => saveContact(db, contact({ id: pat.id, referred_by: pat.id }))).toThrow(/refer themselves/)
+    const lee = saveContact(db, contact({ name: 'Lee', referred_by: maya.id }))
+    expect(() => saveContact(db, contact({ id: pat.id, referred_by: lee.id }))).toThrow(/loop/)
+    expect(() => saveContact(db, contact({ referred_by: randomUUID() }))).toThrow(/no longer exists/)
+  })
+})
+
+describe('tag manager', () => {
+  it('renames, merges and deletes an insight tag across the venture', () => {
+    const db = testDb()
+    createVenture(db, base, 'Sam')
+    const a = saveInsight(db, insightInput.parse({ interview_id: null, text: 'Too pricey', tags: ['price', 'cost'], is_quote: false }))
+    const b = saveInsight(db, insightInput.parse({ interview_id: null, text: 'Pricing page confusing', tags: ['pricing'], is_quote: false }))
+    saveInsight(db, insightInput.parse({ interview_id: null, text: 'Slow', tags: ['speed'], is_quote: false }))
+    db.prepare("UPDATE insights SET updated_at = '2000-01-01T00:00:00.000Z'").run()
+    expect(renameTag(db, { from: 'price', to: 'pricing' })).toBe(1)
+    expect(renameTag(db, { from: 'cost', to: 'pricing' })).toBe(1) // merges into the tag it already has
+    const byId = new Map(listInsights(db).map((n) => [n.id, n]))
+    expect(byId.get(a.id)?.tags).toEqual(['pricing'])
+    expect(byId.get(b.id)?.tags).toEqual(['pricing'])
+    expect(db.prepare('SELECT updated_at FROM insights WHERE id = ?').pluck().get(a.id)).not.toBe('2000-01-01T00:00:00.000Z')
+    expect(renameTag(db, { from: 'pricing', to: null })).toBe(2)
+    expect(listInsights(db).flatMap((n) => n.tags)).toEqual(['speed'])
+    expect(renameTag(db, { from: 'missing', to: 'x' })).toBe(0)
   })
 })
 

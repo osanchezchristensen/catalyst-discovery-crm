@@ -31,9 +31,11 @@ export function ContactDialog({
   const [errors, setErrors] = useState<Record<string, string>>({})
   const [busy, setBusy] = useState(false)
   const [interviews, setInterviews] = useState<Interview[]>([])
+  const [others, setOthers] = useState<Contact[]>([])
 
   useEffect(() => {
     window.api.listInterviews().then((all) => setInterviews(all.filter((i) => i.contact_id === contact.id)), onError)
+    window.api.listContacts().then((all) => setOthers(all.filter((c) => c.id !== contact.id)), onError)
   }, [contact, onError])
 
   const set = (patch: Partial<typeof draft>) => setDraft({ ...draft, ...patch })
@@ -103,6 +105,19 @@ export function ContactDialog({
               {SOURCES.map((s) => (
                 <option key={s} value={s}>
                   {SOURCE_LABELS[s]}
+                </option>
+              ))}
+            </SelectField>
+            <SelectField
+              label="Referred by"
+              value={draft.referred_by ?? ''}
+              onChange={(e) => set({ referred_by: e.target.value || null })}
+              error={errors.referred_by}
+            >
+              <option value="">Nobody</option>
+              {others.map((c) => (
+                <option key={c.id} value={c.id}>
+                  {c.organization ? `${c.name}, ${c.organization}` : c.name}
                 </option>
               ))}
             </SelectField>

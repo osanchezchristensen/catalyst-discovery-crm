@@ -119,6 +119,8 @@ export function applyImport(db: DB, file: WorkspaceFile): Counts {
   const counts: Counts = {}
   try {
     db.transaction(() => {
+      // Rows of one table can point at each other (a contact's referrer), in any order; check at commit instead.
+      db.pragma('defer_foreign_keys = ON')
       for (const t of WORKSPACE_TABLE_NAMES) {
         const rows = file.tables[t] as Row[]
         if (!rows.length) continue

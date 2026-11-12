@@ -1,6 +1,6 @@
 import { AlertCircle, ArrowDown, ArrowUp, Plus, Trash2, X } from 'lucide-react'
 import { useEffect, useState, type FormEvent } from 'react'
-import { QUESTION_BANK, questionTips } from '../../../shared/guides'
+import { QUESTION_BANK, REFERRAL_QUESTION, questionTips } from '../../../shared/guides'
 import { guideInput, type Guide } from '../../../shared/schema'
 import { TextField } from './Field'
 import { Button } from './ui/button'
@@ -25,18 +25,22 @@ export function GuideEditor({
   onError: (err: unknown) => void
 }) {
   const [name, setName] = useState(guide?.name ?? '')
-  const [questions, setQuestions] = useState<string[]>(guide?.questions ?? [])
+  const initial = guide?.questions ?? [REFERRAL_QUESTION]
+  const [questions, setQuestions] = useState<string[]>(initial)
   const [draft, setDraft] = useState('')
   const [errors, setErrors] = useState<Record<string, string>>({})
   const [busy, setBusy] = useState(false)
-  const dirty = name !== (guide?.name ?? '') || JSON.stringify(questions) !== JSON.stringify(guide?.questions ?? [])
+  const dirty = name !== (guide?.name ?? '') || JSON.stringify(questions) !== JSON.stringify(initial)
   useEffect(() => {
     onDirtyChange(dirty)
     return () => onDirtyChange(false)
   }, [dirty, onDirtyChange])
 
+  // New questions go above the referral question while it is last, so it stays the closing question.
   const add = (q: string) => {
-    if (q.trim()) setQuestions([...questions, q.trim()])
+    if (!q.trim()) return
+    const keepLast = questions[questions.length - 1] === REFERRAL_QUESTION
+    setQuestions(keepLast ? [...questions.slice(0, -1), q.trim(), REFERRAL_QUESTION] : [...questions, q.trim()])
   }
   const move = (i: number, by: -1 | 1) => {
     const next = [...questions]

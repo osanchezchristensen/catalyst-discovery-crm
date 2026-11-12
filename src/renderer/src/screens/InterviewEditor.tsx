@@ -89,6 +89,7 @@ export function InterviewEditor({
   const [errors, setErrors] = useState<Record<string, string>>({})
   const [status, setStatus] = useState('')
   const [quickContact, setQuickContact] = useState('')
+  const [referral, setReferral] = useState('')
   const saving = useRef(false)
 
   useEffect(() => {
@@ -229,6 +230,19 @@ export function InterviewEditor({
       onError(err)
     }
   }
+  /** Adds someone the interviewee suggested, with "Referred by" set to them (referral chains on Patterns). */
+  const addReferral = async () => {
+    const referrer = contacts.find((c) => c.id === draft.contact_id)
+    if (!referral.trim() || !referrer) return
+    try {
+      const c = await window.api.saveContact({ ...blankContact(referral.trim(), referrer.segment_id), referred_by: referrer.id })
+      setContacts([...contacts, c])
+      setReferral('')
+      onNotify(`Added ${c.name}, referred by ${referrer.name}.`)
+    } catch (err) {
+      onError(err)
+    }
+  }
 
   const remove = async () => {
     if (!id || !window.confirm("Delete this interview? This can't be undone.")) return
@@ -351,6 +365,30 @@ export function InterviewEditor({
             </div>
           )}
         </fieldset>
+        {draft.contact_id && (
+          <div className="mt-4 flex items-start gap-2">
+            <div className="flex-1">
+              <TextField
+                label="Who did they suggest?"
+                hint="Each person you add is saved as a contact, referred by this interviewee."
+                placeholder="Name of someone they said to talk to…"
+                value={referral}
+                onChange={(e) => setReferral(e.target.value)}
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter') {
+                    e.preventDefault()
+                    void addReferral()
+                  }
+                }}
+                maxLength={200}
+              />
+            </div>
+            <Button variant="secondary" onClick={addReferral} disabled={!referral.trim()} className="mt-6">
+              <Plus aria-hidden strokeWidth={1.5} />
+              Add referral
+            </Button>
+          </div>
+        )}
       </Card>
 
       {guides.length > 0 && (

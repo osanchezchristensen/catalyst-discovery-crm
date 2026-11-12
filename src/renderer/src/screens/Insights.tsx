@@ -1,8 +1,9 @@
-import { Plus, Quote } from 'lucide-react'
+import { Plus, Quote, Tags } from 'lucide-react'
 import { useCallback, useEffect, useState } from 'react'
 import type { Insight } from '../../../shared/schema'
 import { SelectField } from '@/components/Field'
 import { InsightDialog } from '@/components/InsightDialog'
+import { TagManagerDialog } from '@/components/TagManagerDialog'
 import { Button } from '@/components/ui/button'
 import { Card } from '@/components/ui/card'
 import { formatDate } from '@/lib/discovery'
@@ -22,6 +23,7 @@ export function Insights({
   const [items, setItems] = useState<Insight[] | null>(null)
   const [filter, setFilter] = useState('')
   const [open, setOpen] = useState<Insight | 'new' | null>(null)
+  const [managing, setManaging] = useState(false)
   const reload = useCallback(() => window.api.listInsights().then(setItems, onError), [onError])
   useEffect(() => void reload(), [reload])
 
@@ -46,11 +48,29 @@ export function Insights({
             ))}
           </SelectField>
         </div>
-        <Button variant="secondary" onClick={() => setOpen('new')}>
-          <Plus aria-hidden strokeWidth={1.5} />
-          Add insight
-        </Button>
+        <div className="flex gap-2">
+          <Button variant="ghost" onClick={() => setManaging(true)}>
+            <Tags aria-hidden strokeWidth={1.5} />
+            Manage tags
+          </Button>
+          <Button variant="secondary" onClick={() => setOpen('new')}>
+            <Plus aria-hidden strokeWidth={1.5} />
+            Add insight
+          </Button>
+        </div>
       </div>
+      {managing && (
+        <TagManagerDialog
+          counts={[...columns].filter(([t]) => t !== UNTAGGED).map(([t, list]) => [t, list.length] as [string, number]).sort((a, b) => a[0].localeCompare(b[0]))}
+          onClose={() => setManaging(false)}
+          onChanged={(message) => {
+            setFilter('')
+            onNotify(message)
+            void reload()
+          }}
+          onError={onError}
+        />
+      )}
 
       {items.length === 0 ? (
         <Card>
