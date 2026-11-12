@@ -20,7 +20,7 @@ import {
   resetWorkspace,
   suggestMapping
 } from './data-tools'
-import { createVenture, getMeta, getProfile, listContacts, saveContact, saveInterview, saveProfile } from './db/repo'
+import { createVenture, deleteContact, deleteInterview, getMeta, getProfile, listContacts, saveContact, saveInterview, saveProfile } from './db/repo'
 import { parseCsv } from './csv'
 import { testDb } from './test-helpers'
 
@@ -63,6 +63,11 @@ describe('CSV export', () => {
     expect(interviews.rows[0][interviews.headers.indexOf('notes_behavior')]).toBe('• Orders late\n• Eats cold')
     // A second export the same day goes to a new folder instead of overwriting.
     expect(exportCsv(db, dir, { includeContactDetails: true, date: '2026-11-03' })).toBe(join(dir, 'catalyst-export-2026-11-03-2'))
+    // Rows in Trash stay out of spreadsheets.
+    deleteContact(db, listContacts(db)[0].id)
+    deleteInterview(db, db.prepare('SELECT id FROM interviews').pluck().get() as string)
+    const later = exportCsv(db, dir, { includeContactDetails: false, date: '2026-11-04' })
+    for (const t of ['contacts', 'interviews']) expect(parseCsv(readFileSync(join(later, `${t}.csv`), 'utf8')).rows, t).toEqual([])
   })
 })
 

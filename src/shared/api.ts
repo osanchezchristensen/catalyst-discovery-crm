@@ -18,6 +18,8 @@ import type {
   InsightInput,
   Task,
   TaskInput,
+  TrashItem,
+  TrashRef,
   Decision,
   DecisionInput,
   EvidenceLink,
@@ -74,6 +76,7 @@ export type AppEvent =
   | { type: 'import-contacts' }
   | { type: 'import-surveys' }
   | { type: 'search' }
+  | { type: 'summary' }
 
 export interface InvokeApi {
   getAppInfo(): Promise<AppInfo>
@@ -91,6 +94,10 @@ export interface InvokeApi {
   getInterview(id: string): Promise<Interview | null>
   saveInterview(input: InterviewInput): Promise<Interview>
   deleteInterview(id: string): Promise<void>
+  listTrash(): Promise<TrashItem[]>
+  restoreFromTrash(ref: TrashRef): Promise<void>
+  /** Only for rows already in Trash. */
+  deleteForever(ref: TrashRef): Promise<void>
   listHypotheses(version?: number): Promise<Hypothesis[]>
   listHypothesisVersions(): Promise<number[]>
   saveHypothesis(input: HypothesisInput): Promise<Hypothesis>
@@ -116,6 +123,8 @@ export interface InvokeApi {
   backupNow(): Promise<{ at: string }>
   exportWorkspace(opts?: { includeContactDetails: boolean }): Promise<{ path: string } | Canceled>
   exportCsv(opts: { includeContactDetails: boolean }): Promise<{ path: string } | Canceled>
+  /** Prints the window's print-only summary sheet to a PDF the user picks a place for. */
+  saveSummaryPdf(): Promise<{ path: string } | Canceled>
   pickContactsCsv(): Promise<ContactCsvFile | Canceled>
   pickSurveyCsv(): Promise<SurveyCsvFile | Canceled>
   previewSurveyImport(req: SurveyImportRequest): Promise<SurveyImportPreview>
@@ -153,6 +162,9 @@ export const INVOKE_CHANNELS = [
   'getInterview',
   'saveInterview',
   'deleteInterview',
+  'listTrash',
+  'restoreFromTrash',
+  'deleteForever',
   'listHypotheses',
   'listHypothesisVersions',
   'saveHypothesis',
@@ -177,6 +189,7 @@ export const INVOKE_CHANNELS = [
   'backupNow',
   'exportWorkspace',
   'exportCsv',
+  'saveSummaryPdf',
   'pickContactsCsv',
   'pickSurveyCsv',
   'previewSurveyImport',

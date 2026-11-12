@@ -59,7 +59,7 @@ export function ContactDialog({
   }
 
   const remove = async () => {
-    if (!window.confirm(`Delete ${contact.name}? Their interviews stay, without a contact. This can't be undone.`)) return
+    if (!window.confirm(`Move ${contact.name} to Trash? Their interviews stay. You can restore them from Settings for 30 days.`)) return
     try {
       await window.api.deleteContact(contact.id)
       onDeleted(contact.id)

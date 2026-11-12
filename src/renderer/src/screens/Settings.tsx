@@ -6,6 +6,7 @@ import { SelectField, STAGE_OPTIONS, TextField } from '@/components/Field'
 import { Button } from '@/components/ui/button'
 import { Card, CardTitle } from '@/components/ui/card'
 import { Dialog, DialogContent } from '@/components/ui/dialog'
+import { TrashCard } from '@/components/TrashCard'
 import { fieldErrors } from '@/lib/discovery'
 import { focusFirstError, formatDateTime } from '@/lib/utils'
 
@@ -221,6 +222,8 @@ export function Settings({
           </Button>
         </div>
       </Card>
+
+      <TrashCard onNotify={onNotify} onError={onError} />
 
       <Card>
         <CardTitle>Backups</CardTitle>

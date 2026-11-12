@@ -1,4 +1,4 @@
-import { Circle, CircleCheck, Gavel, Pause, Shuffle, Square, Trash2, TrendingUp, type LucideIcon } from 'lucide-react'
+import { Circle, CircleCheck, FileDown, Gavel, Pause, Shuffle, Square, Trash2, TrendingUp, type LucideIcon } from 'lucide-react'
 import { useCallback, useEffect, useState } from 'react'
 import type { Dashboard, DecisionKind } from '../../../shared/schema'
 import { BarChartCard } from '@/components/BarChartCard'
@@ -22,7 +22,15 @@ const topPain = (tags: Dashboard['topTags']) => {
 
 const DECISION_ICONS: Record<DecisionKind, LucideIcon> = { persevere: TrendingUp, pivot: Shuffle, pause: Pause, stop: Square }
 
-export function Viability({ onNotify, onError }: { onNotify: (message: string) => void; onError: (err: unknown) => void }) {
+export function Viability({
+  onSummary,
+  onNotify,
+  onError
+}: {
+  onSummary: () => void
+  onNotify: (message: string) => void
+  onError: (err: unknown) => void
+}) {
   const [data, setData] = useState<Dashboard | null>(null)
   const [deciding, setDeciding] = useState(false)
   const reload = useCallback(() => window.api.getDashboard().then(setData, onError), [onError])
@@ -45,6 +53,12 @@ export function Viability({ onNotify, onError }: { onNotify: (message: string) =
 
   return (
     <div className="flex flex-col gap-6">
+      <div className="flex justify-end">
+        <Button variant="secondary" onClick={onSummary}>
+          <FileDown aria-hidden strokeWidth={1.5} />
+          Summary PDF
+        </Button>
+      </div>
       <Card>
         <CardTitle>Readiness checklist</CardTitle>
         <p className="tabular mt-1 font-semibold">

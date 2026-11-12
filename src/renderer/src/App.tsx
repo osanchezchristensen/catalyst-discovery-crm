@@ -1,12 +1,13 @@
 import { Search } from 'lucide-react'
-import { useCallback, useEffect, useState } from 'react'
+import { useCallback, useEffect, useRef, useState } from 'react'
 import type { ContactCsvFile, ImportPreview, SurveyCsvFile } from '../../shared/api'
 import type { SearchHit } from '../../shared/search'
-import type { Profile, VentureBundle } from '../../shared/schema'
+import type { Profile, TrashRef, VentureBundle } from '../../shared/schema'
 import { AboutDialog } from '@/components/AboutDialog'
 import { ContactImportDialog } from '@/components/ContactImportDialog'
 import { ImportPreviewDialog } from '@/components/ImportPreviewDialog'
 import { SearchDialog } from '@/components/SearchDialog'
+import { SummaryDialog } from '@/components/SummaryDialog'
 import { SurveyImportDialog } from '@/components/SurveyImportDialog'
 import { Sidebar, type Screen } from '@/components/Sidebar'
 import { StatusRegion, type Status } from '@/components/StatusRegion'
@@ -41,6 +42,7 @@ export default function App() {
   const [csvFile, setCsvFile] = useState<ContactCsvFile | null>(null)
   const [surveyFile, setSurveyFile] = useState<SurveyCsvFile | null>(null)
   const [searching, setSearching] = useState(false)
+  const [summarizing, setSummarizing] = useState(false)
   // A contact picked in search, for the Contacts screen to open once it has loaded.
   const [openContactId, setOpenContactId] = useState<string | null>(null)
   const [unsaved, setUnsaved] = useState(false)
@@ -135,6 +137,9 @@ export default function App() {
         case 'search':
           setSearching(true)
           break
+        case 'summary':
+          setSummarizing(true)
+          break
       }
     })
   }, [load, notify, openInterview, importContacts, importSurveys])
@@ -157,6 +162,28 @@ export default function App() {
     return true
   }
   const toastSuccess = useCallback((m: string) => notify('success', m), [notify])
+  const unsavedRef = useRef(unsaved)
+  useEffect(() => {
+    unsavedRef.current = unsaved
+  }, [unsaved])
+  // After a delete: Undo restores, then reloads unless an edit is open (a reload would drop it; the row shows on the next visit).
+  const trashed = useCallback(
+    (ref: TrashRef, label: string) =>
+      setStatus({
+        tone: 'success',
+        message: `${label} moved to Trash`,
+        key: Date.now(),
+        action: {
+          label: 'Undo',
+          run: () =>
+            void api.restoreFromTrash(ref).then(() => {
+              notify('success', `${label} restored`)
+              if (!unsavedRef.current) void load()
+            }, onError)
+        }
+      }),
+    [notify, onError, load]
+  )
   const contactOpened = useCallback(() => setOpenContactId(null), [])
   /** Opens what a search result points at: its interview where there is one, otherwise its screen. */
   const openHit = (hit: SearchHit) => {
@@ -222,6 +249,9 @@ export default function App() {
         />
       )}
       {searching && venture && <SearchDialog onOpen={openHit} onClose={() => setSearching(false)} onError={onError} />}
+      {summarizing && venture && (
+        <SummaryDialog bundle={venture} onClose={() => setSummarizing(false)} onNotify={toastSuccess} onError={onError} />
+      )}
       <StatusRegion status={status} onDismiss={dismiss} />
     </>
   )
@@ -281,6 +311,7 @@ export default function App() {
                 onOpened={contactOpened}
                 onOpenInterview={openInterview}
                 onNotify={toastSuccess}
+                onTrashed={trashed}
                 onError={onError}
               />
             ) : screen === 'settings' ? (
@@ -301,7 +332,7 @@ export default function App() {
             ) : screen === 'patterns' ? (
               <Patterns key={loads} onOpenInterview={openInterview} onError={onError} />
             ) : screen === 'viability' ? (
-              <Viability key={loads} onNotify={toastSuccess} onError={onError} />
+              <Viability key={loads} onSummary={() => setSummarizing(true)} onNotify={toastSuccess} onError={onError} />
             ) : screen === 'hypotheses' ? (
               <Hypotheses key={loads} onOpenInterview={openInterview} onNotify={toastSuccess} onError={onError} />
             ) : screen === 'interviews' && editing ? (
@@ -312,6 +343,7 @@ export default function App() {
                 onBack={closeEditor}
                 onDirtyChange={setUnsaved}
                 onNotify={toastSuccess}
+                onTrashed={trashed}
                 onError={onError}
               />
             ) : screen === 'interviews' ? (

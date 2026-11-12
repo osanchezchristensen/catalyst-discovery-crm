@@ -4,6 +4,8 @@ import { join } from 'node:path'
 import { EVENT_CHANNEL, type AppEvent } from '../shared/api'
 import { backupNow, isBackupDue } from './backup'
 import { openDatabase } from './db/connection'
+import { purgeTrash } from './db/repo'
+import { removeInterviewFiles } from './data-tools'
 import { createActions, registerIpc, type Ctx } from './ipc'
 import { contextMenuTemplate } from './context-menu'
 import { buildMenu } from './menu'
@@ -141,6 +143,13 @@ if (!app.requestSingleInstanceLock()) {
     }
     const database = db
     safeBackup(database) // on every launch
+    const attachmentsDir = join(dataDir, 'attachments')
+    try {
+      // After the launch backup, so the rows purged here are still in it.
+      for (const id of purgeTrash(database)) void removeInterviewFiles(attachmentsDir, id).catch((err) => console.error('Purge files failed', err))
+    } catch (err) {
+      console.error('Trash purge failed', err) // a failed purge must not stop the app from opening
+    }
     setInterval(() => {
       if (isBackupDue(database)) safeBackup(database)
     }, HOUR_MS)
@@ -150,7 +159,7 @@ if (!app.requestSingleInstanceLock()) {
       db: database,
       dataDir,
       backupsDir,
-      attachmentsDir: join(dataDir, 'attachments'),
+      attachmentsDir,
       getWindow: () => win,
       send
     }

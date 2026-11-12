@@ -1,6 +1,6 @@
 import { LayoutGrid, Plus, Table2 } from 'lucide-react'
 import { useCallback, useEffect, useState, type DragEvent, type FormEvent } from 'react'
-import { CONTACT_STAGES as STAGES, type Contact, type ContactStage, type Segment } from '../../../shared/schema'
+import { CONTACT_STAGES as STAGES, type Contact, type ContactStage, type Segment, type TrashRef } from '../../../shared/schema'
 import { ContactDialog } from '@/components/ContactDialog'
 import { SelectField, TextField } from '@/components/Field'
 import { Button } from '@/components/ui/button'
@@ -16,6 +16,7 @@ export function Contacts({
   onOpened,
   onOpenInterview,
   onNotify,
+  onTrashed,
   onError
 }: {
   segments: Segment[]
@@ -24,6 +25,7 @@ export function Contacts({
   onOpened?: () => void
   onOpenInterview: (id: string) => void
   onNotify: (message: string) => void
+  onTrashed: (ref: TrashRef, label: string) => void
   onError: (err: unknown) => void
 }) {
   const [contacts, setContacts] = useState<Contact[] | null>(null)
@@ -300,7 +302,7 @@ export function Contacts({
           onDeleted={(id) => {
             setContacts(contacts.filter((x) => x.id !== id))
             setOpen(null)
-            onNotify('Contact deleted')
+            onTrashed({ kind: 'contact', id }, open.name)
           }}
           onOpenInterview={onOpenInterview}
           onError={onError}

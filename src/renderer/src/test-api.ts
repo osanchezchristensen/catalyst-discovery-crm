@@ -26,7 +26,7 @@ export const hypothesis: Hypothesis = {
  */
 export const contact = (id: string, name: string): Contact => ({
   id, venture_id: 'v1', segment_id: null, name, email: '', phone: '', role: '', organization: '', source: null, stage: 'identified',
-  tags: [], consent_followup: false, notes: '', referred_by: null, created_at: T, updated_at: T
+  tags: [], consent_followup: false, notes: '', referred_by: null, deleted_at: null, created_at: T, updated_at: T
 })
 
 export const insight = (id: string, text: string, tags: string[]): Insight => ({
@@ -58,7 +58,7 @@ export function installFakeApi(opts: { hypotheses?: Hypothesis[]; contacts?: Con
         id: input.id ?? `00000000-0000-4000-8000-${String(saved.length + 1).padStart(12, '0')}`, venture_id: 'v1', contact_id: input.contact_id, date: input.date,
         type: input.type, format: input.format, interviewers: input.interviewers, notes: input.notes, quotes: input.quotes ?? '',
         pain_score: input.pain_score ?? null, wtp_signal: input.wtp_signal ?? '', next_step: input.next_step ?? '',
-        follow_up_date: input.follow_up_date ?? null, created_at: T, updated_at: T, contact_name: null,
+        follow_up_date: input.follow_up_date ?? null, deleted_at: null, created_at: T, updated_at: T, contact_name: null,
         evidence: input.evidence ?? []
       }
       saved.push(row)

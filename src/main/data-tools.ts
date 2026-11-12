@@ -53,6 +53,11 @@ export function exportCsv(db: DB, dir: string, opts: { includeContactDetails: bo
   for (let n = 2; existsSync(folder); n++) folder = join(dir, `catalyst-export-${opts.date}-${n}`)
   mkdirSync(folder)
   const { tables } = exportWorkspace(db, { appVersion: '', exportedBy: '', includeContactDetails: opts.includeContactDetails })
+  // Rows in Trash travel in workspace files (so deletes sync) but stay out of spreadsheets.
+  const trashed = new Set(tables.interviews.filter((i) => i.deleted_at).map((i) => i.id))
+  tables.contacts = tables.contacts.filter((c) => !c.deleted_at)
+  tables.interviews = tables.interviews.filter((i) => !i.deleted_at)
+  tables.evidence = tables.evidence.filter((e) => !trashed.has(e.interview_id))
   for (const t of WORKSPACE_TABLE_NAMES) {
     let columns = Object.keys(workspaceTables[t].shape)
     let rows = (tables[t] as Record<string, unknown>[]).map((r) => columns.map((c) => readable(r[c])))
@@ -234,7 +239,7 @@ export function planSurveyImport(db: DB, { headers, rows }: { headers: string[];
   const byEmail = new Map<string, SurveyContact>(existing.filter((c) => c.email.trim()).map((c) => [c.email.trim().toLowerCase(), c.id]))
   const byName = new Map<string, SurveyContact>(existing.map((c) => [c.name.trim().toLowerCase(), c.id]))
   const done = new Set(
-    (db.prepare("SELECT contact_id, date FROM interviews WHERE venture_id = ? AND format = 'written' AND contact_id IS NOT NULL").all(v) as {
+    (db.prepare("SELECT contact_id, date FROM interviews WHERE venture_id = ? AND format = 'written' AND contact_id IS NOT NULL AND deleted_at IS NULL").all(v) as {
       contact_id: string
       date: string
     }[]).map((r) => `${r.contact_id}|${r.date}`)
@@ -324,7 +329,7 @@ const extOf = (file: string) => extname(file).slice(1).toLowerCase()
 
 function assertInterview(db: DB, interviewId: string) {
   const v = activeVentureId(db)
-  if (!v || !db.prepare('SELECT 1 FROM interviews WHERE id = ? AND venture_id = ?').get(interviewId, v)) {
+  if (!v || !db.prepare('SELECT 1 FROM interviews WHERE id = ? AND venture_id = ? AND deleted_at IS NULL').get(interviewId, v)) {
     throw new AttachmentError('That interview no longer exists. Reload and try again.')
   }
 }

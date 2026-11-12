@@ -38,7 +38,11 @@ import {
   renameTag,
   saveProfile,
   saveVenture,
-  setContactStage
+  setContactStage,
+  listTrash,
+  restoreFromTrash,
+  deleteForever,
+  purgeTrash
 } from './repo'
 import { testDb } from '../test-helpers'
 import { addDays, today, weekStart } from '../../shared/dates'
@@ -574,5 +578,74 @@ describe('readiness thresholds', () => {
     expect(getThresholds(db)).toEqual(DEFAULT_THRESHOLDS)
     db.prepare(`UPDATE cohorts SET settings = 'not json'`).run()
     expect(getThresholds(db)).toEqual(DEFAULT_THRESHOLDS)
+  })
+})
+
+describe('trash', () => {
+  function setup() {
+    const db = testDb()
+    const v = createVenture(db, base, 'Sam')
+    const seg = saveVenture(db, { venture: v.venture, members: [], segments: [{ name: 'Freshmen', description: '', is_beachhead: true }] }).segments[0]
+    const h = saveHypothesis(db, hypothesisInput.parse({ type: 'problem', statement: 'Food arrives cold', risk: 'high', status: 'testing', success_criteria: '' }))
+    const pat = saveContact(db, contact({ segment_id: seg.id }))
+    const maya = saveContact(db, contact({ name: 'Maya', referred_by: pat.id }))
+    const i = saveInterview(db, interview({ contact_id: pat.id, date: today(), evidence: [{ hypothesis_id: h.id, verdict: 'supports', note: '' }] }))
+    const n = saveInsight(db, insightInput.parse({ interview_id: i.id, text: 'Too slow', tags: ['speed'], is_quote: true }))
+    const task = saveTask(db, taskInput.parse({ title: 'Call back', due_date: null, interview_id: i.id, done: false }))
+    return { db, h, pat, maya, i, n, task }
+  }
+
+  it('an interview in Trash stops counting anywhere, and a restore brings everything back', () => {
+    const { db, h, i, n } = setup()
+    const before = { dash: getDashboard(db), home: getHome(db), insights: listInsights(db), tasks: listTasks(db), hyps: listHypotheses(db) }
+    deleteInterview(db, i.id)
+    expect(listInterviews(db)).toEqual([])
+    expect(getInterview(db, i.id)).toBeNull()
+    expect(listHypotheses(db)[0].tally.supports).toBe(0)
+    expect(listEvidence(db, h.id)).toEqual([])
+    expect(getHome(db).thisWeek).toBe(0)
+    const dash = getDashboard(db)
+    expect(dash.perWeek).toEqual([])
+    expect(dash.topTags).toEqual([{ tag: 'speed', count: 1, avgPain: null }])
+    expect(listInsights(db).find((x) => x.id === n.id)).toMatchObject({ interview_id: null, date: null, contact_name: null })
+    expect(listTasks(db)[0].interview_id).toBeNull()
+    expect(() => saveInterview(db, interview({ id: i.id }))).toThrow(/no longer exists/)
+    expect(() => saveInsight(db, insightInput.parse({ interview_id: i.id, text: 'x', tags: [], is_quote: false }))).toThrow(/no longer exists/)
+    expect(listTrash(db)).toEqual([{ kind: 'interview', id: i.id, name: 'Pat', date: today(), deleted_at: expect.any(String) }])
+
+    restoreFromTrash(db, { kind: 'interview', id: i.id })
+    expect(listTrash(db)).toEqual([])
+    expect({ dash: getDashboard(db), home: getHome(db), insights: listInsights(db), tasks: listTasks(db), hyps: listHypotheses(db) }).toEqual(before)
+    expect(() => restoreFromTrash(db, { kind: 'interview', id: i.id })).toThrow(/no longer in Trash/)
+  })
+
+  it('a contact in Trash disappears from lists and links, and comes back on restore', () => {
+    const { db, pat, maya, i } = setup()
+    deleteContact(db, pat.id)
+    expect(listContacts(db).map((c) => c.name)).toEqual(['Maya'])
+    expect(listContacts(db)[0].referred_by).toBeNull()
+    expect(listInterviews(db)[0]).toMatchObject({ contact_id: null, contact_name: null })
+    expect(getDashboard(db).bySegment).toEqual([{ segment: 'No segment', count: 1 }])
+    expect(() => setContactStage(db, { id: pat.id, stage: 'closed' })).toThrow(/no longer exists/)
+    expect(() => saveContact(db, contact({ name: 'Lee', referred_by: pat.id }))).toThrow(/no longer exists/)
+    restoreFromTrash(db, { kind: 'contact', id: pat.id })
+    expect(listContacts(db).find((c) => c.id === maya.id)?.referred_by).toBe(pat.id)
+    expect(getInterview(db, i.id)).toMatchObject({ contact_id: pat.id, contact_name: 'Pat' })
+  })
+
+  it('deletes forever only from Trash, and purges rows trashed over 30 days ago', () => {
+    const { db, pat, i } = setup()
+    expect(() => deleteForever(db, { kind: 'contact', id: pat.id })).toThrow(/no longer in Trash/)
+    deleteContact(db, pat.id)
+    deleteForever(db, { kind: 'contact', id: pat.id })
+    expect(db.prepare('SELECT COUNT(*) FROM contacts WHERE id = ?').pluck().get(pat.id)).toBe(0)
+    expect(db.prepare('SELECT contact_id FROM interviews WHERE id = ?').pluck().get(i.id)).toBeNull()
+
+    deleteInterview(db, i.id)
+    expect(purgeTrash(db, new Date(Date.now() + 29 * 86_400_000))).toEqual([])
+    expect(purgeTrash(db, new Date(Date.now() + 31 * 86_400_000))).toEqual([i.id])
+    expect(db.prepare('SELECT COUNT(*) FROM evidence').pluck().get()).toBe(0)
+    expect(listInsights(db)).toHaveLength(1) // insights outlive their interview, as before
+    expect(listTrash(db)).toEqual([])
   })
 })

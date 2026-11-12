@@ -2,12 +2,13 @@ import { AlertCircle, CheckCircle2, X } from 'lucide-react'
 import { useEffect } from 'react'
 import type { StatusTone } from '../../../shared/api'
 
-export type Status = { tone: StatusTone; message: string; key: number }
+/** `action` (e.g. Undo) keeps the message up until it is used or dismissed, so nobody is rushed. */
+export type Status = { tone: StatusTone; message: string; key: number; action?: { label: string; run: () => void } }
 
 /** One polite live region for success and error messages. Status is icon + word, never color alone. */
 export function StatusRegion({ status, onDismiss }: { status: Status | null; onDismiss: () => void }) {
   useEffect(() => {
-    if (status?.tone !== 'success') return
+    if (status?.tone !== 'success' || status.action) return
     const t = setTimeout(onDismiss, 6000)
     return () => clearTimeout(t)
   }, [status, onDismiss])
@@ -25,6 +26,18 @@ export function StatusRegion({ status, onDismiss }: { status: Status | null; onD
             <span className="font-semibold">{status.tone === 'success' ? 'Done: ' : 'Problem: '}</span>
             {status.message}
           </p>
+          {status.action && (
+            <button
+              type="button"
+              onClick={() => {
+                status.action!.run()
+                onDismiss()
+              }}
+              className="rounded-sm px-1 font-semibold text-primary underline underline-offset-2 hover:no-underline"
+            >
+              {status.action.label}
+            </button>
+          )}
           <button
             type="button"
             onClick={onDismiss}

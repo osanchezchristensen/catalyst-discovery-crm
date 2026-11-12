@@ -5,7 +5,7 @@ import { suggestStatus, type Tally } from '../../shared/evidence'
 import { addDays, today, weekStart } from '../../shared/dates'
 import { DEFAULT_THRESHOLDS, readiness } from '../../shared/readiness'
 import { streak } from '../../shared/streak'
-import { hypothesisSnapshot, thresholdsInput, type Thresholds } from '../../shared/schema'
+import { hypothesisSnapshot, thresholdsInput, TRASH_DAYS, type Thresholds } from '../../shared/schema'
 import type {
   Contact,
   ContactStage,
@@ -20,6 +20,8 @@ import type {
   tagRenameInput,
   Task,
   taskInput,
+  TrashItem,
+  TrashRef,
   decisionInput,
   DecisionKind,
   EvidenceItem,
@@ -228,15 +230,23 @@ function decodeInterview(row: Record<string, unknown>, evidence: EvidenceItem[])
 }
 
 function assertInVenture(db: DB, table: 'segments' | 'contacts' | 'interviews', id: string | null, ventureId: string, what: string) {
-  if (id && !db.prepare(`SELECT 1 FROM ${table} WHERE id = ? AND venture_id = ?`).get(id, ventureId)) {
+  const live = table === 'segments' ? '' : ' AND deleted_at IS NULL' // a row in Trash can't be linked to
+  if (id && !db.prepare(`SELECT 1 FROM ${table} WHERE id = ? AND venture_id = ?${live}`).get(id, ventureId)) {
     throw new Error(`That ${what} no longer exists. Reload and try again.`)
   }
 }
 
+// Reads skip rows in Trash and show links to them as empty, as if they were deleted (ADR 0007).
+// The later `r.id AS referred_by` column replaces the one from c.*.
 export function listContacts(db: DB): Contact[] {
   const v = activeVentureId(db)
   if (!v) return []
-  const rows = db.prepare('SELECT * FROM contacts WHERE venture_id = ? ORDER BY created_at, rowid').all(v)
+  const rows = db
+    .prepare(
+      `SELECT c.*, r.id AS referred_by FROM contacts c LEFT JOIN contacts r ON r.id = c.referred_by AND r.deleted_at IS NULL
+       WHERE c.venture_id = ? AND c.deleted_at IS NULL ORDER BY c.created_at, c.rowid`
+    )
+    .all(v)
   return (rows as Record<string, unknown>[]).map(decodeContact)
 }
 
@@ -261,7 +271,7 @@ export function saveContact(db: DB, input: ContactSave): Contact {
         `UPDATE contacts SET segment_id = @segment_id, name = @name, email = @email, phone = @phone, role = @role,
          organization = @organization, source = @source, stage = @stage, tags = @tags,
          consent_followup = @consent_followup, notes = @notes, referred_by = @referred_by, updated_at = @t
-         WHERE id = @id AND venture_id = @v`
+         WHERE id = @id AND venture_id = @v AND deleted_at IS NULL`
       )
       .run(p).changes
     if (!changed) throw new Error('That contact no longer exists. Reload and try again.')
@@ -279,22 +289,38 @@ export function saveContact(db: DB, input: ContactSave): Contact {
 
 export function setContactStage(db: DB, input: { id: string; stage: ContactStage }): void {
   const changed = db
-    .prepare('UPDATE contacts SET stage = ?, updated_at = ? WHERE id = ? AND venture_id = ?')
+    .prepare('UPDATE contacts SET stage = ?, updated_at = ? WHERE id = ? AND venture_id = ? AND deleted_at IS NULL')
     .run(input.stage, now(), input.id, requireVenture(db)).changes
   if (!changed) throw new Error('That contact no longer exists. Reload and try again.')
 }
 
-/** Deletes the contact (consent requests). Its interviews stay, with no contact (FK ON DELETE SET NULL). */
-export function deleteContact(db: DB, id: string): void {
-  db.prepare('DELETE FROM contacts WHERE id = ? AND venture_id = ?').run(id, requireVenture(db))
+/**
+ * Moves a contact or interview to Trash. updated_at moves too, so a teammate's import takes the delete
+ * unless they edited the row later (ADR 0007).
+ */
+function moveToTrash(db: DB, table: 'contacts' | 'interviews', id: string): void {
+  const t = now()
+  db.prepare(`UPDATE ${table} SET deleted_at = ?, updated_at = ? WHERE id = ? AND venture_id = ? AND deleted_at IS NULL`).run(
+    t,
+    t,
+    id,
+    requireVenture(db)
+  )
 }
 
-const INTERVIEW_SELECT = `SELECT i.*, c.name AS contact_name FROM interviews i LEFT JOIN contacts c ON c.id = i.contact_id`
+/** Moves the contact to Trash. Its interviews stay and show no contact until it is restored. */
+export const deleteContact = (db: DB, id: string): void => moveToTrash(db, 'contacts', id)
+
+// The later `c.id AS contact_id` column replaces the one from i.*, so a contact in Trash reads as none.
+const INTERVIEW_SELECT = `SELECT i.*, c.name AS contact_name, c.id AS contact_id FROM interviews i
+  LEFT JOIN contacts c ON c.id = i.contact_id AND c.deleted_at IS NULL`
 
 export function listInterviews(db: DB): Interview[] {
   const v = activeVentureId(db)
   if (!v) return []
-  const rows = db.prepare(`${INTERVIEW_SELECT} WHERE i.venture_id = ? ORDER BY i.date DESC, i.created_at DESC`).all(v)
+  const rows = db
+    .prepare(`${INTERVIEW_SELECT} WHERE i.venture_id = ? AND i.deleted_at IS NULL ORDER BY i.date DESC, i.created_at DESC`)
+    .all(v)
   // One query for all evidence, grouped by interview, instead of one query per interview.
   const byInterview = new Map<string, EvidenceItem[]>()
   const links = db
@@ -313,7 +339,7 @@ const evidenceOf = (db: DB, interviewId: string) =>
     .all(interviewId) as EvidenceItem[]
 
 export function getInterview(db: DB, id: string): Interview | null {
-  const row = db.prepare(`${INTERVIEW_SELECT} WHERE i.id = ? AND i.venture_id = ?`).get(id, requireVenture(db))
+  const row = db.prepare(`${INTERVIEW_SELECT} WHERE i.id = ? AND i.venture_id = ? AND i.deleted_at IS NULL`).get(id, requireVenture(db))
   return row ? decodeInterview(row as Record<string, unknown>, evidenceOf(db, id)) : null
 }
 
@@ -357,7 +383,7 @@ export function saveInterview(db: DB, input: InterviewSave): Interview {
         .prepare(
           `UPDATE interviews SET contact_id = @contact_id, date = @date, type = @type, format = @format, interviewers = @interviewers,
            notes = @notes, quotes = @quotes, pain_score = @pain_score, wtp_signal = @wtp_signal, next_step = @next_step,
-           follow_up_date = @follow_up_date, updated_at = @t WHERE id = @id AND venture_id = @v`
+           follow_up_date = @follow_up_date, updated_at = @t WHERE id = @id AND venture_id = @v AND deleted_at IS NULL`
         )
         .run(p).changes
       if (!changed) throw new Error('That interview no longer exists. Reload and try again.')
@@ -380,8 +406,57 @@ export function saveInterview(db: DB, input: InterviewSave): Interview {
   return getInterview(db, id!)!
 }
 
-export function deleteInterview(db: DB, id: string): void {
-  db.prepare('DELETE FROM interviews WHERE id = ? AND venture_id = ?').run(id, requireVenture(db))
+/** Moves the interview to Trash. Its evidence, insights and attachments stay for a restore. */
+export const deleteInterview = (db: DB, id: string): void => moveToTrash(db, 'interviews', id)
+
+// ---- Trash (backlog #14, ADR 0007) ----
+const TRASH_TABLES = { contact: 'contacts', interview: 'interviews' } as const
+
+export function listTrash(db: DB): TrashItem[] {
+  const v = activeVentureId(db)
+  if (!v) return []
+  return db
+    .prepare(
+      `SELECT 'contact' AS kind, id, name, NULL AS date, deleted_at FROM contacts WHERE venture_id = @v AND deleted_at IS NOT NULL
+       UNION ALL
+       SELECT 'interview', i.id, c.name, i.date, i.deleted_at FROM interviews i LEFT JOIN contacts c ON c.id = i.contact_id
+       WHERE i.venture_id = @v AND i.deleted_at IS NOT NULL
+       ORDER BY deleted_at DESC`
+    )
+    .all({ v }) as TrashItem[]
+}
+
+/** Takes a row out of Trash. updated_at moves, so the restore wins over an older delete on import. */
+export function restoreFromTrash(db: DB, { kind, id }: TrashRef): void {
+  const t = now()
+  const changed = db
+    .prepare(`UPDATE ${TRASH_TABLES[kind]} SET deleted_at = NULL, updated_at = ? WHERE id = ? AND venture_id = ? AND deleted_at IS NOT NULL`)
+    .run(t, id, requireVenture(db)).changes
+  if (!changed) throw new Error('That item is no longer in Trash. Reload and try again.')
+}
+
+/** Deletes a row in Trash for good (consent requests). Links to it are cleared by the foreign keys. */
+export function deleteForever(db: DB, { kind, id }: TrashRef): void {
+  const changed = db
+    .prepare(`DELETE FROM ${TRASH_TABLES[kind]} WHERE id = ? AND venture_id = ? AND deleted_at IS NOT NULL`)
+    .run(id, requireVenture(db)).changes
+  if (!changed) throw new Error('That item is no longer in Trash. Reload and try again.')
+}
+
+/**
+ * Deletes rows that have been in Trash for more than TRASH_DAYS, in every venture. Returns the purged
+ * interview ids so their attachment files can be removed.
+ * shortcut: a purged row comes back if a teammate imports an older file that still has it; upgrade to
+ * kept tombstones if that bites.
+ */
+export function purgeTrash(db: DB, at = new Date()): string[] {
+  const cutoff = new Date(at.getTime() - TRASH_DAYS * 86_400_000).toISOString()
+  return db.transaction(() => {
+    const ids = db.prepare('SELECT id FROM interviews WHERE deleted_at < ?').pluck().all(cutoff) as string[]
+    db.prepare('DELETE FROM interviews WHERE deleted_at < ?').run(cutoff)
+    db.prepare('DELETE FROM contacts WHERE deleted_at < ?').run(cutoff)
+    return ids
+  })()
 }
 
 // ---- Hypotheses (F5) and evidence drill-down (F6) ----
@@ -401,6 +476,7 @@ export function listHypotheses(db: DB, version?: number): Hypothesis[] {
          COALESCE(SUM(e.verdict = 'refutes'), 0) AS refutes,
          COALESCE(SUM(e.verdict = 'neutral'), 0) AS neutral
        FROM hypotheses h LEFT JOIN evidence e ON e.hypothesis_id = h.id
+         AND e.interview_id IN (SELECT id FROM interviews WHERE deleted_at IS NULL)
        WHERE h.venture_id = ? AND h.version = ?
        GROUP BY h.id ORDER BY h.created_at, h.rowid`
     )
@@ -483,8 +559,8 @@ export function listEvidence(db: DB, hypothesisId: string): EvidenceLink[] {
   return db
     .prepare(
       `SELECT e.hypothesis_id, e.verdict, e.note, e.interview_id, i.date, c.name AS contact_name
-       FROM evidence e JOIN interviews i ON i.id = e.interview_id LEFT JOIN contacts c ON c.id = i.contact_id
-       WHERE e.hypothesis_id = ? AND i.venture_id = ? ORDER BY i.date DESC, i.created_at DESC`
+       FROM evidence e JOIN interviews i ON i.id = e.interview_id LEFT JOIN contacts c ON c.id = i.contact_id AND c.deleted_at IS NULL
+       WHERE e.hypothesis_id = ? AND i.venture_id = ? AND i.deleted_at IS NULL ORDER BY i.date DESC, i.created_at DESC`
     )
     .all(hypothesisId, requireVenture(db)) as EvidenceLink[]
 }
@@ -577,7 +653,7 @@ export function getDashboard(db: DB): Dashboard {
     ? (db
         .prepare(
           `SELECT i.date, i.type, i.pain_score, i.wtp_signal, c.segment_id FROM interviews i
-           LEFT JOIN contacts c ON c.id = i.contact_id WHERE i.venture_id = ?`
+           LEFT JOIN contacts c ON c.id = i.contact_id AND c.deleted_at IS NULL WHERE i.venture_id = ? AND i.deleted_at IS NULL`
         )
         .all(v) as { date: string; type: string; pain_score: number | null; wtp_signal: string; segment_id: string | null }[])
     : []
@@ -617,7 +693,7 @@ export function getDashboard(db: DB): Dashboard {
     (db
       .prepare(
         `SELECT e.hypothesis_id, COUNT(*) AS n FROM evidence e JOIN interviews i ON i.id = e.interview_id
-         WHERE i.venture_id = ? AND i.type != 'informational' GROUP BY e.hypothesis_id`
+         WHERE i.venture_id = ? AND i.type != 'informational' AND i.deleted_at IS NULL GROUP BY e.hypothesis_id`
       )
       .all(v ?? '') as { hypothesis_id: string; n: number }[]).map((r) => [r.hypothesis_id, r.n])
   )
@@ -658,7 +734,12 @@ export function listTasks(db: DB): Task[] {
   if (!v) return []
   return (
     db
-      .prepare('SELECT * FROM tasks WHERE venture_id = ? ORDER BY done, due_date IS NULL, due_date, created_at')
+      .prepare(
+        // A follow-up stays when its interview is in Trash, without the link (as after a real delete).
+        `SELECT t.id, t.title, t.due_date, t.done, t.created_at, i.id AS interview_id FROM tasks t
+         LEFT JOIN interviews i ON i.id = t.interview_id AND i.deleted_at IS NULL
+         WHERE t.venture_id = ? ORDER BY t.done, t.due_date IS NULL, t.due_date, t.created_at`
+      )
       .all(v) as Record<string, unknown>[]
   ).map(decodeTask)
 }
@@ -700,7 +781,7 @@ export function getHome(db: DB): Home {
   if (!v) return { goal: 3, thisWeek: 0, streak: 0, tasks: [] }
   const goal = db.prepare('SELECT weekly_goal FROM ventures WHERE id = ?').pluck().get(v) as number
   const perWeek = new Map<string, number>()
-  for (const d of db.prepare('SELECT date FROM interviews WHERE venture_id = ?').pluck().all(v) as string[]) {
+  for (const d of db.prepare('SELECT date FROM interviews WHERE venture_id = ? AND deleted_at IS NULL').pluck().all(v) as string[]) {
     perWeek.set(weekStart(d), (perWeek.get(weekStart(d)) ?? 0) + 1)
   }
   const thisWeek = weekStart(today())
@@ -720,8 +801,9 @@ export function listInsights(db: DB): Insight[] {
   if (!v) return []
   const rows = db
     .prepare(
-      `SELECT n.*, i.date, c.name AS contact_name FROM insights n
-       LEFT JOIN interviews i ON i.id = n.interview_id LEFT JOIN contacts c ON c.id = i.contact_id
+      `SELECT n.*, i.id AS interview_id, i.date, c.name AS contact_name FROM insights n
+       LEFT JOIN interviews i ON i.id = n.interview_id AND i.deleted_at IS NULL
+       LEFT JOIN contacts c ON c.id = i.contact_id AND c.deleted_at IS NULL
        WHERE n.venture_id = ? ORDER BY n.created_at DESC, n.rowid DESC`
     )
     .all(v) as Record<string, unknown>[]
@@ -785,7 +867,10 @@ export function renameTag(db: DB, { from, to }: z.output<typeof tagRenameInput>)
 /** Most-used insight tags with the average pain score of the interviews they came from. */
 function topTags(db: DB, ventureId: string): Dashboard['topTags'] {
   const rows = db
-    .prepare('SELECT n.tags, i.pain_score FROM insights n LEFT JOIN interviews i ON i.id = n.interview_id WHERE n.venture_id = ?')
+    .prepare(
+      `SELECT n.tags, i.pain_score FROM insights n LEFT JOIN interviews i ON i.id = n.interview_id AND i.deleted_at IS NULL
+       WHERE n.venture_id = ?`
+    )
     .all(ventureId) as { tags: string; pain_score: number | null }[]
   const byTag = new Map<string, { count: number; painSum: number; painN: number }>()
   for (const r of rows) {

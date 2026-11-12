@@ -1,6 +1,6 @@
 import { randomUUID } from 'node:crypto'
 import { describe, expect, it } from 'vitest'
-import { createVenture, getActiveVenture, listContacts, listInterviews, saveContact, saveHypothesis, saveInterview, saveProfile, saveVenture, listHypotheses, listDecisions, recordDecision, saveTask, saveInsight, saveGuide, listTasks, listInsights, listGuides, getThresholds, saveThresholds } from './db/repo'
+import { createVenture, getActiveVenture, listContacts, listInterviews, saveContact, saveHypothesis, saveInterview, saveProfile, saveVenture, listHypotheses, listDecisions, recordDecision, saveTask, saveInsight, saveGuide, listTasks, listInsights, listGuides, getThresholds, saveThresholds, deleteContact, listTrash } from './db/repo'
 import { contactInput, decisionInput, guideInput, hypothesisInput, insightInput, interviewInput, taskInput } from '../shared/schema'
 import { migrations } from './db/migrations'
 import { testDb } from './test-helpers'
@@ -113,6 +113,37 @@ describe('import merge', () => {
     expect(previewImport(target, newer).ventures).toEqual({ added: 0, updated: 1, unchanged: 0 })
     applyImport(target, newer)
     expect(getActiveVenture(target)?.venture.name).toBe('Renamed')
+  })
+
+  it('treats a delete as an edit: the newest change wins either way', () => {
+    const { db } = seeded()
+    db.prepare("UPDATE contacts SET updated_at = '2020-01-01T00:00:00.000Z'").run() // so the delete below is strictly newer
+    const target = testDb()
+    applyImport(target, roundTrip(exportWorkspace(db, opts)))
+    const [pat] = listContacts(db)
+    const later = (ms: number) => new Date(Date.now() + ms).toISOString()
+
+    // A teammate's newer delete moves the contact to Trash here.
+    deleteContact(db, pat.id)
+    const deleted = roundTrip(exportWorkspace(db, opts))
+    expect(previewImport(target, deleted).contacts).toEqual({ added: 0, updated: 1, unchanged: 0 })
+    applyImport(target, deleted)
+    expect(listContacts(target)).toEqual([])
+    expect(listTrash(target).map((x) => x.id)).toEqual([pat.id])
+
+    // A newer local edit (here: a restore) wins over that older delete.
+    target.prepare('UPDATE contacts SET deleted_at = NULL, updated_at = ?').run(later(1000))
+    applyImport(target, deleted)
+    expect(listContacts(target).map((c) => c.id)).toEqual([pat.id])
+
+    // A file from before migration v8 has no deleted_at; a newer row from it is live.
+    const old = exportWorkspace(db, opts) as unknown as { tables: { contacts: Record<string, unknown>[] } }
+    delete old.tables.contacts[0].deleted_at
+    old.tables.contacts[0].updated_at = later(2000)
+    deleteContact(target, pat.id)
+    target.prepare("UPDATE contacts SET updated_at = '2020-01-02T00:00:00.000Z'").run() // older than the file's row (capped at now)
+    applyImport(target, roundTrip(old))
+    expect(listContacts(target).map((c) => c.id)).toEqual([pat.id])
   })
 
   it('keeps local contact email and phone when a newer import has them blanked', () => {
