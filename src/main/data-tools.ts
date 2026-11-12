@@ -20,7 +20,7 @@ import {
   type SurveyMapping
 } from '../shared/schema'
 import { backupBeforeReset } from './backup'
-import { noteToPlain, plainToHtml } from '../shared/notes'
+import { escapeHtml, noteToPlain, plainToHtml } from '../shared/notes'
 import { today } from '../shared/dates'
 import { toCsv } from './csv'
 import { activeVentureId, getActiveVenture, listContacts, saveContact, saveInterview } from './db/repo'
@@ -219,8 +219,6 @@ export type SurveyImportPlan = {
   invalid: { row: number; message: string }[]
 }
 
-const escapeHtml = (s: string) => s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
-
 /**
  * Turns survey rows into Written response interviews. Contacts are matched by email, then by name; unknown people
  * become new contacts. A row is skipped as already imported when that person already has a Written response on that
@@ -250,25 +248,6 @@ export function planSurveyImport(db: DB, { headers, rows }: { headers: string[];
     const date = mapping.date === null ? today() : surveyDate(cell(row, mapping.date))
     if (!date) return void plan.invalid.push({ row: k + 2, message: `The date “${cell(row, mapping.date)}” wasn’t understood. Use 2026-11-03 or 11/3/2026.` })
 
-    const name = cell(row, mapping.name)
-    const email = cell(row, mapping.email).toLowerCase()
-    let contact: SurveyContact = (email && byEmail.get(email)) || (name && byName.get(name.toLowerCase())) || null
-    if (!contact && (name || email)) {
-      const input: ContactInput = {
-        segment_id: null, name: name || email, email, phone: '', role: '', organization: '', source: null, stage: 'identified',
-        tags: [], consent_followup: false, notes: ''
-      }
-      const parsed = contactInput.safeParse(input)
-      if (!parsed.success) return void plan.invalid.push({ row: k + 2, message: `${parsed.error.issues[0].path.join('.')}: ${parsed.error.issues[0].message}` })
-      contact = { new: plan.contacts.push(input) - 1 }
-      // Later rows from the same person reuse this new contact.
-      if (email) byEmail.set(email, contact)
-      if (name) byName.set(name.toLowerCase(), contact)
-    }
-
-    const dupKey = `${typeof contact === 'string' ? contact : contact ? `new:${contact.new}` : ''}|${date}`
-    if (contact && done.has(dupKey)) return void plan.duplicates++
-
     const notes = { behavior: '', pains: '', solutions: '', budget: '' }
     const quotes: string[] = []
     for (const a of answers) {
@@ -283,7 +262,26 @@ export function planSurveyImport(db: DB, { headers, rows }: { headers: string[];
       const issue = parsed.error.issues[0]
       return void plan.invalid.push({ row: k + 2, message: `${issue.path.join('.')}: ${issue.message}` })
     }
-    if (contact) done.add(dupKey)
+
+    // The contact comes last, so a row that is skipped never leaves a new contact behind.
+    const name = cell(row, mapping.name)
+    const email = cell(row, mapping.email).toLowerCase()
+    let contact: SurveyContact = (email && byEmail.get(email)) || (name && byName.get(name.toLowerCase())) || null
+    const dupKey = (c: SurveyContact) => `${typeof c === 'string' ? c : c ? `new:${c.new}` : ''}|${date}`
+    if (contact && done.has(dupKey(contact))) return void plan.duplicates++
+    if (!contact && (name || email)) {
+      const input: ContactInput = {
+        segment_id: null, name: name || email, email, phone: '', role: '', organization: '', source: null, stage: 'identified',
+        tags: [], consent_followup: false, notes: ''
+      }
+      const checked = contactInput.safeParse(input)
+      if (!checked.success) return void plan.invalid.push({ row: k + 2, message: `${checked.error.issues[0].path.join('.')}: ${checked.error.issues[0].message}` })
+      contact = { new: plan.contacts.push(input) - 1 }
+      // Later rows from the same person reuse this new contact.
+      if (email) byEmail.set(email, contact)
+      if (name) byName.set(name.toLowerCase(), contact)
+    }
+    if (contact) done.add(dupKey(contact))
     plan.rows.push({ contact, interview: parsed.data })
   })
   return plan

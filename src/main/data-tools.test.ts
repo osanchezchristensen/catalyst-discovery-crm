@@ -149,6 +149,12 @@ describe('survey CSV import', () => {
     expect(again).toMatchObject({ rows: [], duplicates: 4 })
   })
 
+  it('does not plan a new contact for a row it rejects', () => {
+    const big = parseCsv(`Name,Answer\nNew Person,"${'x'.repeat(50_100)}"\n`)
+    const plan = planSurveyImport(seeded(), big, suggestSurveyMapping(big.headers))
+    expect(plan).toMatchObject({ rows: [], contacts: [], invalid: [{ row: 2, message: expect.stringMatching(/too long/) }] })
+  })
+
   it('puts answers mapped to quotes in the quotes field and refuses a column past the end', () => {
     const plan = planSurveyImport(seeded(), csv, { ...mapping, answers: [{ col: 4, section: 'quotes' }] })
     expect(plan.rows[1].interview.quotes).toBe('Late buses\nand no shelter')

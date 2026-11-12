@@ -148,11 +148,13 @@ export default function App() {
     return () => window.removeEventListener('beforeunload', block)
   }, [unsaved])
   const confirmLeave = () => !unsaved || window.confirm('You have unsaved changes. Leave without saving?')
-  const navigate = (next: Screen) => {
-    if (next === screen && !editing) return
-    if (!confirmLeave()) return
+  /** Returns false when the user chose to stay with unsaved edits. */
+  const navigate = (next: Screen): boolean => {
+    if (next === screen && !editing) return true
+    if (!confirmLeave()) return false
     setEditing(null)
     setScreen(next)
+    return true
   }
   const toastSuccess = useCallback((m: string) => notify('success', m), [notify])
   const contactOpened = useCallback(() => setOpenContactId(null), [])
@@ -160,8 +162,8 @@ export default function App() {
   const openHit = (hit: SearchHit) => {
     setSearching(false)
     if (hit.interviewId) return openInterview(hit.interviewId)
-    if (hit.kind === 'contacts') setOpenContactId(hit.id)
-    navigate(hit.kind === 'contacts' ? 'contacts' : hit.kind === 'insights' ? 'insights' : 'hypotheses')
+    const moved = navigate(hit.kind === 'contacts' ? 'contacts' : hit.kind === 'insights' ? 'insights' : 'hypotheses')
+    if (moved && hit.kind === 'contacts') setOpenContactId(hit.id)
   }
   const closeEditor = useCallback(() => setEditing(null), [])
   const pickImport = async () => {

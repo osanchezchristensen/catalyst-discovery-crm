@@ -21,12 +21,14 @@ export function cleanNoteHtml(html: string): string {
   return out + escapeText(html.slice(last))
 }
 
+export const escapeHtml = (s: string) => s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
+
 /** Plain text (notes before v0.11.0) to one paragraph per line. */
 export function plainToHtml(text: string): string {
   if (!text) return ''
   return text
     .split(/\r?\n/)
-    .map((line) => `<p>${line.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')}</p>`)
+    .map((line) => `<p>${escapeHtml(line)}</p>`)
     .join('')
 }
 
