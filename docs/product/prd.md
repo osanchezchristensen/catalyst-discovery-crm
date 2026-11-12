@@ -50,7 +50,7 @@ The app has no telemetry, so these metrics are measured from exported workspace 
 | F1 | Local workspace (no sign-in) | Opens straight into the app. First launch asks for your name and venture. Data is stored in a SQLite file in the OS app-data folder. Export and import the whole workspace as JSON for backups, moving computers and sharing with teammates | P0 |
 | F2 | Venture workspace | Venture name, one-line pitch, problem statement, target segments, Catalyst stage, semester, team member names | P0 |
 | F3 | Contacts pipeline | People to interview: name, role, organization, segment, source (warm intro, LinkedIn, event, cold), tags, consent to follow up. Kanban stages: Identified → Reached out → Scheduled → Interviewed → Follow-up → Closed | P0 |
-| F4 | Interview log | Date, contact, interviewers, format (in person, video, phone), structured notes (current behavior, pains, current solutions, budget and willingness-to-pay signals), key quotes, pain intensity 1–5, next step, follow-up date | P0 |
+| F4 | Interview log | Date, contact, interviewers, type (informational, validation, sales), format (in person, video, phone, written response), structured notes (current behavior, pains, current solutions, budget and willingness-to-pay signals), key quotes, pain intensity 1–5, next step, follow-up date | P0 |
 | F5 | Hypotheses board | Assumptions by type (Customer, Problem, Solution/Value, Channel, Revenue/WTP, Feasibility) with risk level and status: Untested, Testing, Validated, Invalidated or Mixed | P0 |
 | F6 | Evidence linking | From an interview, mark each hypothesis Supports, Refutes or Neutral, with a note. Hypothesis cards show the tally and suggest a status | P0 |
 | F7 | Viability dashboard | Interviews over time, interviews by segment, hypothesis scorecard, top pains by frequency and intensity, readiness checklist | P0 |
@@ -69,7 +69,7 @@ The app has no telemetry, so these metrics are measured from exported workspace 
 - [ ] At least 3 interviews show a willingness-to-pay or commitment signal (pilot, pre-order, intro)
 - [ ] Decision recorded with rationale
 
-These thresholds are defaults that can be edited per cohort. Confirm them with program staff.
+These thresholds are defaults that can be edited per cohort. Confirm them with program staff. Informational interviews don't count toward any item (from v0.10.0).
 
 ## Data model
 
@@ -82,13 +82,13 @@ These thresholds are defaults that can be edited per cohort. Confirm them with p
 | guides | id, venture_id, name, questions (JSON) | interview guides (F9), ADR 0003 |
 | segments | id, venture_id, name, description, is_beachhead | used by contacts and interviews |
 | contacts | id, venture_id, segment_id, name, email, phone, role, organization, source, stage, tags, consent_followup, notes | has interviews |
-| interviews | id, venture_id, contact_id, date, format, interviewers, notes (JSON), quotes, pain_score, wtp_signal, next_step, follow_up_date | links to hypotheses and insights |
+| interviews | id, venture_id, contact_id, date, type, format, interviewers, notes (JSON), quotes, pain_score, wtp_signal, next_step, follow_up_date | links to hypotheses and insights |
 | hypotheses | id, venture_id, version, type, statement, risk, status, success_criteria | linked through evidence |
 | evidence | id, hypothesis_id, interview_id, verdict (supports, refutes, neutral), note | joins interviews to hypotheses |
 | insights | id, venture_id, interview_id, text, tags, is_quote | from interviews |
 | decisions | id, venture_id, decision, rationale, decided_at, evidence_ids (JSON: the cited hypotheses with their status and tally at decision time) | pivot history; a pivot copies hypotheses into a new version |
 | tasks | id, venture_id, assignee_name, title, due_date, done, interview_id | follow-ups |
-| attachments | id, interview_id, file_name, stored_path, mime, bytes | F15 |
+| attachments | id, interview_id, file_name, stored_path, mime, bytes (25 MB limit per file from v0.10.0) | F15 |
 | meta | key, value | schema_version, last_backup_at, workspace_id |
 
 All ids are UUIDs, so workspaces from different computers can merge on import. Array and list fields are stored as JSON text columns.
