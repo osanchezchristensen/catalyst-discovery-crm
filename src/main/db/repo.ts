@@ -345,7 +345,7 @@ export function saveInterview(db: DB, input: InterviewSave): Interview {
     if (id) {
       const changed = db
         .prepare(
-          `UPDATE interviews SET contact_id = @contact_id, date = @date, format = @format, interviewers = @interviewers,
+          `UPDATE interviews SET contact_id = @contact_id, date = @date, type = @type, format = @format, interviewers = @interviewers,
            notes = @notes, quotes = @quotes, pain_score = @pain_score, wtp_signal = @wtp_signal, next_step = @next_step,
            follow_up_date = @follow_up_date, updated_at = @t WHERE id = @id AND venture_id = @v`
         )
@@ -354,9 +354,9 @@ export function saveInterview(db: DB, input: InterviewSave): Interview {
     } else {
       id = randomUUID()
       db.prepare(
-        `INSERT INTO interviews (id, venture_id, contact_id, date, format, interviewers, notes, quotes, pain_score,
+        `INSERT INTO interviews (id, venture_id, contact_id, date, type, format, interviewers, notes, quotes, pain_score,
          wtp_signal, next_step, follow_up_date, created_at, updated_at)
-         VALUES (@id, @v, @contact_id, @date, @format, @interviewers, @notes, @quotes, @pain_score, @wtp_signal,
+         VALUES (@id, @v, @contact_id, @date, @type, @format, @interviewers, @notes, @quotes, @pain_score, @wtp_signal,
          @next_step, @follow_up_date, @t, @t)`
       ).run({ ...p, id })
     }
@@ -566,10 +566,10 @@ export function getDashboard(db: DB): Dashboard {
   const interviews = v
     ? (db
         .prepare(
-          `SELECT i.date, i.pain_score, i.wtp_signal, c.segment_id FROM interviews i
+          `SELECT i.date, i.type, i.pain_score, i.wtp_signal, c.segment_id FROM interviews i
            LEFT JOIN contacts c ON c.id = i.contact_id WHERE i.venture_id = ?`
         )
-        .all(v) as { date: string; pain_score: number | null; wtp_signal: string; segment_id: string | null }[])
+        .all(v) as { date: string; type: string; pain_score: number | null; wtp_signal: string; segment_id: string | null }[])
     : []
   const beachhead = segments.find((s) => s.is_beachhead)
 
@@ -602,6 +602,22 @@ export function getDashboard(db: DB): Dashboard {
 
   const hypotheses = listHypotheses(db)
   const decisions = listDecisions(db)
+  // Readiness doesn't count Informational interviews (backlog #3); the charts above and the board's tallies do.
+  const counted = new Map(
+    (db
+      .prepare(
+        `SELECT e.hypothesis_id, COUNT(*) AS n FROM evidence e JOIN interviews i ON i.id = e.interview_id
+         WHERE i.venture_id = ? AND i.type != 'informational' GROUP BY e.hypothesis_id`
+      )
+      .all(v ?? '') as { hypothesis_id: string; n: number }[]).map((r) => [r.hypothesis_id, r.n])
+  )
+  const readinessInput = {
+    segments,
+    interviews: interviews.filter((i) => i.type !== 'informational'),
+    // readiness only reads the tally's total, so the counted links go in one bucket.
+    hypotheses: hypotheses.map((h) => ({ ...h, tally: { supports: counted.get(h.id) ?? 0, refutes: 0, neutral: 0 } })),
+    decisions
+  }
   return {
     perWeek,
     bySegment,
@@ -609,7 +625,7 @@ export function getDashboard(db: DB): Dashboard {
     hasBeachhead: !!beachhead,
     hypotheses,
     decisions,
-    readiness: readiness({ segments, interviews, hypotheses, decisions }, getThresholds(db)),
+    readiness: readiness(readinessInput, getThresholds(db)),
     topTags: v ? topTags(db, v) : []
   }
 }

@@ -1,7 +1,7 @@
 {
   "name": "catalyst-discovery-crm",
   "productName": "Catalyst Discovery CRM",
-  "version": "0.9.0",
+  "version": "0.10.0",
   "description": "Offline customer-discovery CRM for The Catalyst cohort at KU",
   "private": true,
   "main": "./out/main/index.js",

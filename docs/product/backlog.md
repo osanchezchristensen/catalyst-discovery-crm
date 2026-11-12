@@ -27,7 +27,7 @@ Already shipped in v0.9.0, so not new work:
 
 ## Ideas
 
-1. **Right-click to copy and paste.**
+1. **Right-click to copy and paste.** Shipped in v0.10.0.
    - Today, right-clicking text does nothing: the app has no context menu.
    - Add Cut, Copy, Paste and Select all to every text field.
 
@@ -35,7 +35,7 @@ Already shipped in v0.9.0, so not new work:
    - Notes are plain text today. Pasting from Word, Google Docs or a web page can bring in messy spacing and lose list structure.
    - Decision: notes use the rich text editor (item 5). A paste keeps only what the toolbar can make (bold, underline, numbered and bullet lists, paragraphs) and drops everything else: fonts, colors, images, tables and links.
 
-3. **Interview types.** Add a type to each interview, and let students filter and chart by it:
+3. **Interview types.** Shipped in v0.10.0 (filters and charts by type come with item 11). Add a type to each interview, and let students filter and chart by it:
    - **Informational:** researching the problem.
    - **Validation:** finding out whether they would buy it.
    - **Sales:** trying to sell to them.
@@ -44,7 +44,7 @@ Already shipped in v0.9.0, so not new work:
    - Decision: the migration sets existing interviews to Validation, so no venture's readiness drops after the update. New interviews require a type.
    - Needs a database migration: a new `type` column on `interviews`.
 
-4. **"Written response" interview format,** next to In person, Video and Phone, for surveys and email answers.
+4. **"Written response" interview format.** Shipped in v0.10.0. A format next to In person, Video and Phone, for surveys and email answers.
    - Small change: one new value in `INTERVIEW_FORMATS` (`src/shared/schema.ts`) and its label. The database doesn't restrict the column, so no migration is needed.
 
 5. **Formatting toolbar on interview notes only** (no other text box gets it): bold, underline, numbered list, bullet list.
@@ -53,7 +53,7 @@ Already shipped in v0.9.0, so not new work:
    - Exports: CSV gets plain text, with lists as `-` or `1.` lines. Workspace export keeps the HTML.
    - Needs a migration that turns existing plain-text notes into paragraphs, and an update so insights read the text without tags.
 
-6. **Spell check** in text boxes, with suggestions in the right-click menu (item 1).
+6. **Spell check.** Shipped in v0.10.0 (Windows and macOS). Spell check in text boxes, with suggestions in the right-click menu (item 1).
    - Electron uses the system spell checker on Windows and macOS. On Linux it downloads dictionaries from the internet, which breaks the no-network rule, so turn it off on Linux.
 
 ### Save time
@@ -94,7 +94,7 @@ Already shipped in v0.9.0, so not new work:
 15. **Attach files to interviews:** for example photos of whiteboard notes or survey screenshots, copied into the data folder.
     - Decision: 25 MB limit per file.
     - Answered: workspace export does not include attachments (PRD, "Data storage and privacy"), so the 50 MB import limit is not affected.
-    - Attachments shipped in v0.9.0 with no size limit. Only the limit is new work.
+    - Attachments shipped in v0.9.0 with no size limit. The 25 MB limit shipped in v0.10.0; files already stored stay.
 
 ### Outreach, calendar and agent
 

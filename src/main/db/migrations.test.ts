@@ -87,6 +87,17 @@ describe('migrate', () => {
     expect(db.prepare('SELECT questions FROM guides').pluck().get()).toBe('[]')
   })
 
+  it('v5 sets existing interviews to Validation and keeps their data', () => {
+    const db = fresh()
+    migrate(db, migrations.slice(0, 4))
+    db.prepare("INSERT INTO ventures (id, name, stage, created_at, updated_at) VALUES ('v1', 'Campus Eats', 1, 't', 't')").run()
+    db.prepare(
+      "INSERT INTO interviews (id, venture_id, date, format, quotes, created_at, updated_at) VALUES ('i1', 'v1', '2026-11-03', 'phone', 'Too slow', 't', 't')"
+    ).run()
+    migrate(db, migrations.slice(0, 5))
+    expect(db.prepare('SELECT type, format, quotes FROM interviews').get()).toEqual({ type: 'validation', format: 'phone', quotes: 'Too slow' })
+  })
+
   it('refuses a database from a newer app version', () => {
     const db = fresh()
     db.pragma(`user_version = ${migrations.length + 1}`)

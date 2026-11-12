@@ -11,12 +11,14 @@ afterEach(() => {
   vi.useRealTimers()
 })
 
-async function openNewInterview() {
+async function openNewInterview(type: string | null = 'validation') {
   // Fake timers from the start so the editor's autosave interval is under test control; time still flows for findBy*.
   vi.useFakeTimers({ shouldAdvanceTime: true })
   render(<App />)
   fireEvent.click(await screen.findByRole('button', { name: 'Log interview' }))
-  return screen.findByLabelText('Pains')
+  const pains = await screen.findByLabelText('Pains')
+  if (type) fireEvent.change(screen.getByLabelText(/^Type/), { target: { value: type } })
+  return pains
 }
 
 describe('interview editor inside the app', () => {
@@ -29,6 +31,18 @@ describe('interview editor inside the app', () => {
     await act(() => vi.advanceTimersByTimeAsync(5000))
     expect(api.saveInterview).toHaveBeenCalledTimes(1)
     expect(api.saveInterview.mock.calls[0][0].notes.pains).toBe('Food arrives cold')
+  })
+
+  it('does not save a new interview until a type is chosen, and says why', async () => {
+    const api = installFakeApi()
+    const pains = await openNewInterview(null)
+    fireEvent.change(pains, { target: { value: 'Food arrives cold' } })
+    await act(() => vi.advanceTimersByTimeAsync(5000))
+    expect(api.saveInterview).not.toHaveBeenCalled()
+    expect(await screen.findByText('Choose an interview type')).toBeTruthy()
+    fireEvent.change(screen.getByLabelText(/^Type/), { target: { value: 'informational' } })
+    await act(() => vi.advanceTimersByTimeAsync(5000))
+    expect(api.saveInterview.mock.calls[0][0].type).toBe('informational')
   })
 
   it('sends the evidence verdict picked for a hypothesis with the next save', async () => {

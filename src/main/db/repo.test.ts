@@ -129,7 +129,7 @@ const contact = (over: Record<string, unknown> = {}) =>
   })
 const interview = (over: Record<string, unknown> = {}) =>
   interviewInput.parse({
-    contact_id: null, date: '2026-11-03', format: 'video', interviewers: ['Sam'], quotes: '', pain_score: 4,
+    contact_id: null, date: '2026-11-03', type: 'validation', format: 'video', interviewers: ['Sam'], quotes: '', pain_score: 4,
     wtp_signal: '', next_step: '', follow_up_date: null,
     notes: { behavior: 'Orders late', pains: 'Cold food', solutions: 'Microwave', budget: '' }, ...over
   })
@@ -197,6 +197,16 @@ describe('interviews', () => {
     const [first, second] = listInterviews(db)
     expect(first).toMatchObject({ id: newer.id, interviewers: [], notes: { behavior: '', pains: '' } })
     expect(second.date).toBe('2026-10-01')
+  })
+
+  it('saves the interview type and written-response format, and requires a type', () => {
+    const db = testDb()
+    createVenture(db, base, 'Sam')
+    const i = saveInterview(db, interview({ type: 'sales', format: 'written' }))
+    expect(getInterview(db, i.id)).toMatchObject({ type: 'sales', format: 'written' })
+    expect(saveInterview(db, interview({ id: i.id, type: 'informational' })).type).toBe('informational')
+    expect(() => interview({ type: undefined })).toThrow(/Choose an interview type/)
+    expect(() => interview({ type: '' })).toThrow(/Choose an interview type/)
   })
 })
 
@@ -379,6 +389,32 @@ describe('dashboard', () => {
     expect(decodeSnapshots(text)).toEqual([good])
     expect(decodeSnapshots('{"not":"an array"}')).toEqual([])
     expect(decodeSnapshots('not json')).toEqual([])
+  })
+
+  it('readiness skips Informational interviews, but the charts still count them', () => {
+    const db = testDb()
+    const v = createVenture(db, base, 'Sam')
+    const seg = saveVenture(db, { venture: v.venture, members: [], segments: [{ name: 'Freshmen', description: '', is_beachhead: true }] }).segments[0]
+    const c = saveContact(db, contact({ segment_id: seg.id }))
+    const h = saveHypothesis(db, hypothesis())
+    const linked = (type: string) =>
+      saveInterview(db, interview({ contact_id: c.id, type, pain_score: 5, wtp_signal: 'Pre-order', evidence: [{ hypothesis_id: h.id, verdict: 'supports', note: '' }] }))
+    linked('validation')
+    linked('informational')
+    linked('informational')
+    const d = getDashboard(db)
+    const item = (key: string) => d.readiness.find((r) => r.key === key)?.progress
+    expect(item('beachhead-interviews')).toBe('1 of 10 beachhead interviews')
+    expect(item('wtp')).toBe('1 of 3 interviews with a signal')
+    expect(item('pain')).toBe('100% of beachhead interviews scored 4+')
+    expect(d.pain.find((p) => p.score === 5)).toEqual({ score: 5, all: 3, beachhead: 3 })
+    expect(d.bySegment).toEqual([{ segment: 'Freshmen', count: 3 }])
+    expect(d.hypotheses[0].tally.supports).toBe(3) // the board still shows all evidence
+
+    saveThresholds(db, { ...DEFAULT_THRESHOLDS, riskiest: 1, interviewsPerHypothesis: 2 })
+    expect(getDashboard(db).readiness.find((r) => r.key === 'riskiest')?.done).toBe(false)
+    linked('sales')
+    expect(getDashboard(db).readiness.find((r) => r.key === 'riskiest')?.done).toBe(true)
   })
 
   it('is empty, not broken, with no interviews', () => {

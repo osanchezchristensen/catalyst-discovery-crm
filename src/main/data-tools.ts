@@ -168,7 +168,7 @@ export const ATTACHMENT_TYPES: Record<string, string> = {
   mp4: 'video/mp4',
   mov: 'video/quicktime'
 }
-export const MAX_ATTACHMENT_BYTES = 100 * 1024 * 1024
+export const MAX_ATTACHMENT_BYTES = 25 * 1024 * 1024
 
 export class AttachmentError extends Error {}
 
@@ -198,12 +198,12 @@ export async function addAttachment(db: DB, root: string, interviewId: string, s
   try {
     const st = await handle.stat()
     if (!st.isFile()) throw new AttachmentError('That isn’t a regular file.')
-    if (st.size > MAX_ATTACHMENT_BYTES) throw new AttachmentError('That file is larger than 100 MB.')
+    if (st.size > MAX_ATTACHMENT_BYTES) throw new AttachmentError('That file is larger than 25 MB.')
     mkdirSync(dir, { recursive: true })
     const limit = new Transform({
       transform(chunk: Buffer, _enc, done) {
         bytes += chunk.length
-        done(bytes > MAX_ATTACHMENT_BYTES ? new AttachmentError('That file is larger than 100 MB.') : null, chunk)
+        done(bytes > MAX_ATTACHMENT_BYTES ? new AttachmentError('That file is larger than 25 MB.') : null, chunk)
       }
     })
     await pipeline(handle.createReadStream({ autoClose: false }), limit, createWriteStream(join(dir, name), { flags: 'wx' }))
