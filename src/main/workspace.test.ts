@@ -1,6 +1,6 @@
 import { randomUUID } from 'node:crypto'
 import { describe, expect, it } from 'vitest'
-import { createVenture, getActiveVenture, listContacts, listInterviews, saveContact, saveHypothesis, saveInterview, saveProfile, saveVenture, listHypotheses, listDecisions, recordDecision, saveTask, saveInsight, saveGuide, listTasks, listInsights, listGuides, getThresholds, saveThresholds, deleteContact, listTrash } from './db/repo'
+import { createVenture, getActiveVenture, listContacts, listInterviews, saveContact, saveHypothesis, saveInterview, saveProfile, saveVenture, listHypotheses, listDecisions, recordDecision, saveTask, saveInsight, saveGuide, listTasks, listInsights, listGuides, getThresholds, saveThresholds, deleteContact, listTrash, purgeTrash } from './db/repo'
 import { contactInput, decisionInput, guideInput, hypothesisInput, insightInput, interviewInput, taskInput } from '../shared/schema'
 import { migrations } from './db/migrations'
 import { testDb } from './test-helpers'
@@ -144,6 +144,36 @@ describe('import merge', () => {
     target.prepare("UPDATE contacts SET updated_at = '2020-01-02T00:00:00.000Z'").run() // older than the file's row (capped at now)
     applyImport(target, roundTrip(old))
     expect(listContacts(target).map((c) => c.id)).toEqual([pat.id])
+  })
+
+  it("starts the Trash clock at import time, not at the file's deleted_at", () => {
+    const { db } = seeded()
+    const [pat] = listContacts(db)
+    deleteContact(db, pat.id)
+    const file = roundTrip(exportWorkspace(db, opts))
+    file.tables.contacts[0].deleted_at = '2000-01-01T00:00:00.000Z'
+    const day = 86_400_000
+    const inDays = (n: number) => new Date(Date.now() + n * day)
+
+    // New row (insert) and existing live row (update) both land in Trash with a fresh 30 days.
+    const fresh = testDb()
+    applyImport(fresh, file)
+    const live = testDb()
+    applyImport(live, roundTrip({ ...file, tables: { ...file.tables, contacts: [{ ...file.tables.contacts[0], deleted_at: null, updated_at: '2020-01-01T00:00:00.000Z' }] } }))
+    applyImport(live, file)
+    for (const target of [fresh, live]) {
+      expect(purgeTrash(target, inDays(29))).toEqual([])
+      expect(listTrash(target).map((x) => x.id)).toEqual([pat.id])
+      purgeTrash(target, inDays(31))
+      expect(listTrash(target)).toEqual([])
+    }
+
+    // A row already in Trash keeps its own clock when a newer file also has it deleted.
+    const kept = testDb()
+    applyImport(kept, file)
+    kept.prepare("UPDATE contacts SET deleted_at = '2026-01-01T00:00:00.000Z', updated_at = '2020-01-01T00:00:00.000Z'").run()
+    applyImport(kept, file)
+    expect(kept.prepare('SELECT deleted_at FROM contacts').pluck().get()).toBe('2026-01-01T00:00:00.000Z')
   })
 
   it('keeps local contact email and phone when a newer import has them blanked', () => {
