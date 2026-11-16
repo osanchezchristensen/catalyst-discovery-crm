@@ -65,9 +65,7 @@ export function parseWorkspace(text: string): WorkspaceFile {
   for (const rows of Object.values(result.data.tables) as Row[][]) {
     for (const row of rows) {
       if (row.updated_at > nowIso) row.updated_at = nowIso
-      if ((row.created_at as string) > nowIso) row.created_at = nowIso
-      if (typeof row.deleted_at === 'string' && row.deleted_at > nowIso) row.deleted_at = nowIso // else it never purges
-    }
+      if ((row.created_at as string) > nowIso) row.created_at = nowIso    }
   }
   return result.data
 }
@@ -128,7 +126,11 @@ export function applyImport(db: DB, file: WorkspaceFile): Counts {
         const cols = columns(t)
         // Interviews from files older than v5 have no type (null): new rows become Validation, existing rows keep theirs.
         const untyped = (c: string) => t === 'interviews' && c === 'type'
-        const value = (c: string) => (untyped(c) ? `COALESCE(@${c}, 'validation')` : `@${c}`)
+        // A file's deleted_at must not start the 30-day Trash clock (a backdated one would purge at next launch),
+        // so a row that newly lands in Trash here gets the local import time.
+        const trashedNow = `CASE WHEN @deleted_at IS NULL THEN NULL ELSE strftime('%Y-%m-%dT%H:%M:%fZ', 'now') END`
+        const value = (c: string) =>
+          untyped(c) ? `COALESCE(@${c}, 'validation')` : c === 'deleted_at' ? trashedNow : `@${c}`
         const insert = db.prepare(`INSERT INTO ${t} (${cols.join(', ')}) VALUES (${cols.map(value).join(', ')})`)
         // Exports blank contact email/phone by default; a blank incoming value must not wipe the local one.
         const set = (c: string) =>
@@ -138,7 +140,9 @@ export function applyImport(db: DB, file: WorkspaceFile): Counts {
               ? `${c} = COALESCE(@${c}, ${c})`
               : t === 'contacts' && c === 'referred_by' && file.schema_version < 7
                 ? `${c} = ${c}` // files before v7 can't know referrers; null there is "missing", not "removed"
-                : `${c} = @${c}`
+                : c === 'deleted_at'
+                  ? `${c} = CASE WHEN @${c} IS NOT NULL AND ${c} IS NOT NULL THEN ${c} ELSE ${trashedNow} END` // already in Trash: keep its clock
+                  : `${c} = @${c}`
         const update = db.prepare(`UPDATE ${t} SET ${cols.map(set).join(', ')} WHERE id = @id`)
         const classify = classifier(db, t)
         const c = { added: 0, updated: 0, unchanged: 0 }
